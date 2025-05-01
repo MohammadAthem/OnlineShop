@@ -1,0 +1,3 @@
+Shoes/shoe1.png
+Shirts/shirt2.png
+Pants/pants1.png

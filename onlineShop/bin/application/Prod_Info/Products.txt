@@ -1,0 +1,11 @@
+SHOES/Nike/NikeShoe/120/Shoe1.png
+SHOES/Adidas/AdidasShoe/100/Shoe1.png
+SHOES/Skechers/SkechersShoe/60/Shoe1.png
+SHOES/Puma/PumaShoe/90/Shoe1.png
+SHIRTS/Nike/NikeShirt/70/shirt1.png
+SHIRTS/AE/AEShirt/50/shirt1.png
+SHIRTS/CK/CKShirt/90/shirt1.png
+SHIRTS/Gucci/GucciShirt/150/shirt1.png
+PANTS/Gucci/GucciPants/125/pants1.png
+PANTS/Adidas/AdidasPants/125/pants1.png
+PANTS/Poop/PoopPants/125/pants1.png
