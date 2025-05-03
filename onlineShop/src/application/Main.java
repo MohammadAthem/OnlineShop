@@ -31,6 +31,7 @@ import javafx.scene.control.PasswordField;
 import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.ScrollBar;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.ScrollPane.ScrollBarPolicy;
 import javafx.scene.control.TextField;
 import javafx.scene.effect.BlendMode;
 import javafx.scene.image.Image;
@@ -45,11 +46,13 @@ public class Main extends Application {
 	ArrayList<Product> Products = new ArrayList<Product>();
 	ArrayList<Product> Cart = new ArrayList<Product>();
 	private static final String IMG_PATH = "file:///C:/Users/moham/eclipse-workspace/onlineShop/src/application/Images/";
+	private Stage mainStage;
 
 	@Override
 	public void start(Stage primaryStage) {
 		productsList();
 
+		this.mainStage = primaryStage;
 		Font Roboto = Font.loadFont(getClass().getResourceAsStream("Roboto-SemiBold.ttf"), 16);
 
 		VBox Categories = new VBox(15);
@@ -343,57 +346,36 @@ public class Main extends Application {
 			cartStuff.getChildren().addAll(cartBtn, amount, IncDecBtns);
 
 			amount.setOnAction(e -> {
+				if (amount.getText().trim().isEmpty())
+					return;
 
-				int count = 0;
-
-				if (!(amount.getText().trim().isEmpty())) {
-					try {
-						count = Integer.parseInt(amount.getText());
-						if (count <= 0) {
-							Alert zeroInput = new Alert(Alert.AlertType.WARNING);
-							zeroInput.setTitle("Invalid Quantity");
-							zeroInput.setHeaderText(null);
-							zeroInput.setContentText("Please enter a quantity greater than 0.");
-							zeroInput.showAndWait();
-							return;
-						}
-					} catch (NumberFormatException ex) {
-						Alert wrongInput = new Alert(Alert.AlertType.ERROR);
-						wrongInput.setTitle("Input Error");
-						wrongInput.setHeaderText(null);
-						wrongInput.setContentText("Invalid input! Please enter numbers only.");
-						wrongInput.showAndWait();
+				try {
+					int count = Integer.parseInt(amount.getText());
+					if (count <= 0) {
+						Alert zeroInput = new Alert(Alert.AlertType.WARNING);
+						zeroInput.setTitle("Invalid Quantity");
+						zeroInput.setHeaderText(null);
+						zeroInput.setContentText("Please enter a quantity greater than 0.");
+						zeroInput.showAndWait();
+						return;
 					}
 
-					String SelectedSize = sizeBox.getValue();
-					String SelectedColor = colorBox.getValue();
-					for (int i = 0; i < count; i++) {
-						if (SelectedSize != null && SelectedColor != null) {
-							Product newItem = new Product(product);
-							newItem.setSelectedSize(SelectedSize);
-							newItem.setSelectedColor(SelectedColor);
-							Cart.add(newItem);
-							System.out.println("Item added successfully");
-							FAIL.setFill(Color.TRANSPARENT);
-						} else if (SelectedSize != null && SelectedColor == null) {
-							FAIL.setText("Please choose a color!");
-							FAIL.setFill(Color.RED);
-						} else if (SelectedSize == null && SelectedColor != null) {
-							FAIL.setText("Please choose a size!");
-							FAIL.setFill(Color.RED);
-						} else {
-							FAIL.setText("Please choose both a size and a color!");
-							FAIL.setFill(Color.RED);
-						}
-					}
+					tryAddToCart(product, sizeBox.getValue(), colorBox.getValue(), count, FAIL);
+				} catch (NumberFormatException ex) {
+					Alert wrongInput = new Alert(Alert.AlertType.ERROR);
+					wrongInput.setTitle("Input Error");
+					wrongInput.setHeaderText(null);
+					wrongInput.setContentText("Invalid input! Please enter numbers only.");
+					wrongInput.showAndWait();
 				}
+
 				amount.clear();
 			});
 
 			cartBtn.setOnAction(e -> {
-				int count = 0;
+				int count = 1;
 
-				if (!(amount.getText().trim().isEmpty())) {
+				if (!amount.getText().trim().isEmpty()) {
 					try {
 						count = Integer.parseInt(amount.getText());
 						if (count <= 0) {
@@ -410,50 +392,11 @@ public class Main extends Application {
 						wrongInput.setHeaderText(null);
 						wrongInput.setContentText("Invalid input! Please enter numbers only.");
 						wrongInput.showAndWait();
-					}
-
-					String SelectedSize = sizeBox.getValue();
-					String SelectedColor = colorBox.getValue();
-					for (int i = 0; i < count; i++) {
-						if (SelectedSize != null && SelectedColor != null) {
-							Product newItem = new Product(product);
-							newItem.setSelectedSize(SelectedSize);
-							newItem.setSelectedColor(SelectedColor);
-							Cart.add(newItem);
-							System.out.println("Item added successfully");
-							FAIL.setFill(Color.TRANSPARENT);
-						} else if (SelectedSize != null && SelectedColor == null) {
-							FAIL.setText("Please choose a color!");
-							FAIL.setFill(Color.RED);
-						} else if (SelectedSize == null && SelectedColor != null) {
-							FAIL.setText("Please choose a size!");
-							FAIL.setFill(Color.RED);
-						} else {
-							FAIL.setText("Please choose both a size and a color!");
-							FAIL.setFill(Color.RED);
-						}
-					}
-				} else {
-					String SelectedSize = sizeBox.getValue();
-					String SelectedColor = colorBox.getValue();
-					if (SelectedSize != null && SelectedColor != null) {
-						Product newItem = new Product(product);
-						newItem.setSelectedSize(SelectedSize);
-						newItem.setSelectedColor(SelectedColor);
-						Cart.add(newItem);
-						System.out.println("Item added successfully");
-						FAIL.setFill(Color.TRANSPARENT);
-					} else if (SelectedSize != null && SelectedColor == null) {
-						FAIL.setText("Please choose a color!");
-						FAIL.setFill(Color.RED);
-					} else if (SelectedSize == null && SelectedColor != null) {
-						FAIL.setText("Please choose a size!");
-						FAIL.setFill(Color.RED);
-					} else {
-						FAIL.setText("Please choose both a size and a color!");
-						FAIL.setFill(Color.RED);
+						return;
 					}
 				}
+
+				tryAddToCart(product, sizeBox.getValue(), colorBox.getValue(), count, FAIL);
 				amount.clear();
 			});
 
@@ -496,8 +439,10 @@ public class Main extends Application {
 
 		ScrollPane scrollPane = new ScrollPane();
 		scrollPane.setContent(cartContainer);
-		scrollPane.setStyle(
-				"-fx-border-color: #ccc; -fx-border-radius: 10; -fx-background-radius: 10; -fx-background-color: #f9f9f9;");
+		scrollPane.setStyle("-fx-background: #e0e0e0; -fx-border-color: transparent;"
+				+ "-fx-effect: dropshadow(gaussian, #ffffff, 3, 0, -2, -2),"
+				+ "            dropshadow(gaussian, #c0c0c0, 3, 0, 2, 2);");
+
 		scrollPane.setFitToWidth(true);
 		scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.ALWAYS);
 
@@ -633,7 +578,7 @@ public class Main extends Application {
 		scrollPane.setContent(itemsRecap);
 		scrollPane.setStyle(
 				"-fx-border-color: #ccc; -fx-border-radius: 10; -fx-background-radius: 10; -fx-background-color: #f9f9f9;");
-		scrollPane.setFitToWidth(true);
+		scrollPane.setPrefWidth(390);
 		scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
 		scrollPane.setBackground(Background.EMPTY);
 
@@ -732,6 +677,7 @@ public class Main extends Application {
 
 			Confirm.setOnAction(b -> {
 				payPalCheck(payPalStage, payPalEmail, payPalPass);
+
 			});
 
 			payPalLogin.getChildren().addAll(payPalEmail, payPalPass, Confirm);
@@ -758,22 +704,59 @@ public class Main extends Application {
 
 	}
 
+	private void tryAddToCart(Product baseProduct, String size, String color, int count, Text failText) {
+		if (size == null || color == null) {
+			if (size == null && color == null) {
+				failText.setText("Please choose both a size and a color!");
+			} else if (size == null) {
+				failText.setText("Please choose a size!");
+			} else {
+				failText.setText("Please choose a color!");
+			}
+			failText.setFill(Color.RED);
+			return;
+		}
+
+		for (int i = 0; i < count; i++) {
+			Product item = new Product(baseProduct);
+			item.setSelectedSize(size);
+			item.setSelectedColor(color);
+			Cart.add(item);
+		}
+		failText.setFill(Color.TRANSPARENT);
+		System.out.println("Item(s) added successfully");
+	}
+
 	private void payPalCheck(Stage payPalStage, TextField emailField, PasswordField passField) {
 		String emailRegex = "^[\\w.-]+@[\\w.-]+\\.[a-zA-Z]{2,6}$";
 
 		if (Pattern.matches(emailRegex, emailField.getText())) {
 			StackPane loadingPane = new StackPane(new ProgressIndicator());
 			StackPane root = new StackPane(loadingPane);
+			root.setStyle("-fx-background-color: #e0e0e0;" + "-fx-border-color: transparent;"
+					+ "-fx-effect: dropshadow(gaussian, #ffffff, 3, 0, -2, -2),"
+					+ "            dropshadow(gaussian, #c0c0c0, 3, 0, 2, 2);");
 
-			Scene scene = new Scene(root, 350, 350);
+			Scene scene = new Scene(root, 350, 300);
 			payPalStage.setScene(scene);
 			payPalStage.setTitle("Checking...");
 			payPalStage.show();
 
 			PauseTransition pause = new PauseTransition(Duration.seconds(3));
 			pause.setOnFinished(p -> {
-				root.getChildren().setAll(new Label("Success!"));
+				ImageView check = new ImageView(IMG_PATH + "checkmark2.png");
+				check.setFitWidth(300);
+				check.setFitHeight(300);
+				root.getChildren().setAll(check);
+
+				PauseTransition pause1 = new PauseTransition(Duration.seconds(1.5));
+				pause1.setOnFinished(c -> {
+					payPalStage.close();
+					showConfirmation(mainStage);
+				});
+				pause1.play();
 			});
+
 			pause.play();
 		} else {
 			// Just show an alert, clear the fields, and let user retry
@@ -785,8 +768,89 @@ public class Main extends Application {
 
 			emailField.clear();
 			passField.clear();
-			emailField.requestFocus(); // Bring cursor back to email
 		}
+	}
+
+	private void showConfirmation(Stage primaryStage) {
+
+		VBox layout = new VBox(20);
+		layout.setAlignment(Pos.CENTER);
+		layout.setPadding(new Insets(30));
+		layout.setStyle("-fx-background-color: #e0f7fa;");
+
+		HBox itemsRecap = new HBox(15);
+		itemsRecap.setPadding(new Insets(10));
+		itemsRecap.setAlignment(Pos.TOP_CENTER);
+		itemsRecap.setBackground(Background.EMPTY);
+
+		ScrollPane scrollPane = new ScrollPane();
+		scrollPane.setContent(itemsRecap);
+		scrollPane.setStyle(
+				"-fx-border-color: #ccc; -fx-border-radius: 10; -fx-background-radius: 10; -fx-background-color: #f9f9f9;");
+		scrollPane.setPrefHeight(220);
+		scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+		scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+		scrollPane.setBackground(Background.EMPTY);
+
+		ImageView checkMark = new ImageView(new Image(IMG_PATH + "check.png"));
+		checkMark.setFitWidth(150);
+		checkMark.setFitHeight(150);
+
+		HBox itemRecap = new HBox(10);
+		itemRecap.setAlignment(Pos.CENTER);
+		itemRecap.getChildren().addAll(checkMark, scrollPane);
+
+		ArrayList<Product> printedItems = new ArrayList<Product>();
+
+		for (Product product : Cart) {
+			if (printedItems.contains(product))
+				continue;
+
+			int count = 0;
+			for (Product dupe : Cart) {
+				if (product.equals(dupe)) {
+					count++;
+				}
+			}
+			printedItems.add(product);
+
+			ImageView img = new ImageView(IMG_PATH + product.getImgFileName());
+			img.setFitWidth(150);
+			img.setFitHeight(150);
+
+			Label itemInfo = new Label();
+			if (count > 1) {
+				itemInfo.setText(count + "x " + product.getName() + "\n" + "$" + product.getPrice());
+			} else {
+				itemInfo.setText(product.getName() + "\n" + "$" + product.getPrice());
+			}
+			itemInfo.setFont(Font.font("Book Antiqua", FontWeight.BOLD, 15));
+
+			VBox itemCardFULL = new VBox(1);
+			itemCardFULL.setAlignment(Pos.CENTER);
+			itemCardFULL.setBackground(Background.EMPTY);
+			itemCardFULL.getChildren().addAll(img, itemInfo);
+
+			itemsRecap.getChildren().addAll(itemCardFULL);
+		}
+
+		Label thankYou = new Label("Thank you for your purchase!");
+		thankYou.setFont(Font.font("Book Antiqua", FontWeight.BOLD, 24));
+
+		Label details = new Label("Your order will arive in 3 - 5 business days. We appreciate your business!");
+		details.setFont(Font.font("Book Antiqua", 16));
+
+		Button returnBtn = new Button("Return to Home");
+		applyBtnStyle(returnBtn);
+		returnBtn.setOnAction(e -> {
+			Cart.clear();
+			start(primaryStage);
+		});
+
+		layout.getChildren().addAll(itemRecap, thankYou, details, returnBtn);
+
+		Scene scene = new Scene(layout, 800, 800);
+		primaryStage.setScene(scene);
 	}
 
 	private void applyBtnStyle(Button button) {
