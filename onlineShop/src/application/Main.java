@@ -482,6 +482,9 @@ public class Main extends Application {
 		cartItemsFlow.setVgap(30);
 		cartItemsFlow.setPadding(new Insets(20));
 		cartItemsFlow.setAlignment(Pos.TOP_CENTER);
+		cartItemsFlow.setStyle("-fx-background-color: #e0e0e0;" + "-fx-border-color: transparent;"
+				+ "-fx-effect: dropshadow(gaussian, #ffffff, 3, 0, -2, -2),"
+				+ "            dropshadow(gaussian, #c0c0c0, 3, 0, 2, 2);");
 
 		VBox cartContainer = new VBox(10);
 		cartContainer.setStyle("-fx-background-color: #e0e0e0;" + "-fx-border-color: transparent;"
@@ -597,12 +600,29 @@ public class Main extends Application {
 
 	private void checkOut(Stage primaryStage) {
 
+		VBox COLayoutFULL = new VBox(10);
+		COLayoutFULL.setPadding(new Insets(20));
+		COLayoutFULL.setAlignment(Pos.TOP_CENTER);
+		COLayoutFULL.setStyle("-fx-background-color: #e0e0e0;" + "-fx-border-color: transparent;"
+				+ "-fx-effect: dropshadow(gaussian, #ffffff, 3, 0, -2, -2),"
+				+ "            dropshadow(gaussian, #c0c0c0, 3, 0, 2, 2);");
+
+		BorderPane COLayoutTitle = new BorderPane();
+		COLayoutTitle.setPadding(new Insets(10, 20, 10, 20));
+
+		Button returnBtn = new Button("Return");
+		returnBtn.setOnAction(e -> showCart(primaryStage));
+		applyBtnStyle(returnBtn);
+
+		Label COTitle = new Label("Check Out              ");
+		COTitle.setFont(Font.font("", FontWeight.EXTRA_BOLD, 25));
+
+		COLayoutTitle.setRight(COTitle);
+		COLayoutTitle.setLeft(returnBtn);
+
 		HBox COLayout = new HBox(30);
 		COLayout.setPadding(new Insets(20));
 		COLayout.setAlignment(Pos.TOP_CENTER);
-		COLayout.setStyle("-fx-background-color: #e0e0e0;" + "-fx-border-color: transparent;"
-				+ "-fx-effect: dropshadow(gaussian, #ffffff, 3, 0, -2, -2),"
-				+ "            dropshadow(gaussian, #c0c0c0, 3, 0, 2, 2);");
 
 		VBox itemsRecap = new VBox(15);
 		itemsRecap.setPadding(new Insets(10));
@@ -725,41 +745,17 @@ public class Main extends Application {
 			payPalStage.setScene(paypalScene);
 			payPalStage.setTitle("PayPal login");
 			payPalStage.show();
-			payPalStage.isAlwaysOnTop();
 		});
 
 		paymentMethod.getChildren().addAll(creditCard, payPal);
 
 		COLayout.getChildren().addAll(scrollPane, payMethodInfo);
 
-		Scene COscene = new Scene(COLayout, 800, 800);
+		COLayoutFULL.getChildren().addAll(COLayoutTitle, COLayout);
+
+		Scene COscene = new Scene(COLayoutFULL, 800, 800);
 		primaryStage.setScene(COscene);
 
-	}
-
-	private void applyBtnStyle(Button button) {
-		button.setStyle("-fx-background-color: #e0e0e0;" + "-fx-text-fill: #333333;" + "-fx-font-weight: bold;"
-				+ "-fx-background-radius: 12;" + "-fx-border-radius: 12;" + "-fx-padding: 10 20;" + "-fx-cursor: hand;"
-				+ "-fx-effect: dropshadow(gaussian, #ffffff, 4, 0, -2, -2),"
-				+ "            dropshadow(gaussian, #c0c0c0, 4, 0, 2, 2);");
-
-		button.setOnMouseEntered(e -> {
-			button.setStyle("-fx-background-color: #d1d1d1;" + "-fx-text-fill: #333333;" + "-fx-font-weight: bold;"
-					+ "-fx-background-radius: 12;" + "-fx-border-radius: 12;" + "-fx-padding: 10 20;"
-					+ "-fx-cursor: hand;" + "-fx-effect: dropshadow(gaussian, #b0b0b0, 6, 0, 2, 2),"
-					+ "            dropshadow(gaussian, #ffffff, 6, 0, -2, -2);");
-			button.setScaleX(1.05);
-			button.setScaleY(1.05);
-		});
-
-		button.setOnMouseExited(e -> {
-			button.setStyle("-fx-background-color: #e0e0e0;" + "-fx-text-fill: #333333;" + "-fx-font-weight: bold;"
-					+ "-fx-background-radius: 12;" + "-fx-border-radius: 12;" + "-fx-padding: 10 20;"
-					+ "-fx-cursor: hand;" + "-fx-effect: dropshadow(gaussian, #ffffff, 4, 0, -2, -2),"
-					+ "            dropshadow(gaussian, #c0c0c0, 4, 0, 2, 2);");
-			button.setScaleX(1.0);
-			button.setScaleY(1.0);
-		});
 	}
 
 	private void payPalCheck(Stage payPalStage, TextField emailField, PasswordField passField) {
@@ -791,6 +787,31 @@ public class Main extends Application {
 			passField.clear();
 			emailField.requestFocus(); // Bring cursor back to email
 		}
+	}
+
+	private void applyBtnStyle(Button button) {
+		button.setStyle("-fx-background-color: #e0e0e0;" + "-fx-text-fill: #333333;" + "-fx-font-weight: bold;"
+				+ "-fx-background-radius: 12;" + "-fx-border-radius: 12;" + "-fx-padding: 10 20;" + "-fx-cursor: hand;"
+				+ "-fx-effect: dropshadow(gaussian, #ffffff, 4, 0, -2, -2),"
+				+ "            dropshadow(gaussian, #c0c0c0, 4, 0, 2, 2);");
+
+		button.setOnMouseEntered(e -> {
+			button.setStyle("-fx-background-color: #d1d1d1;" + "-fx-text-fill: #333333;" + "-fx-font-weight: bold;"
+					+ "-fx-background-radius: 12;" + "-fx-border-radius: 12;" + "-fx-padding: 10 20;"
+					+ "-fx-cursor: hand;" + "-fx-effect: dropshadow(gaussian, #b0b0b0, 6, 0, 2, 2),"
+					+ "            dropshadow(gaussian, #ffffff, 6, 0, -2, -2);");
+			button.setScaleX(1.05);
+			button.setScaleY(1.05);
+		});
+
+		button.setOnMouseExited(e -> {
+			button.setStyle("-fx-background-color: #e0e0e0;" + "-fx-text-fill: #333333;" + "-fx-font-weight: bold;"
+					+ "-fx-background-radius: 12;" + "-fx-border-radius: 12;" + "-fx-padding: 10 20;"
+					+ "-fx-cursor: hand;" + "-fx-effect: dropshadow(gaussian, #ffffff, 4, 0, -2, -2),"
+					+ "            dropshadow(gaussian, #c0c0c0, 4, 0, 2, 2);");
+			button.setScaleX(1.0);
+			button.setScaleY(1.0);
+		});
 	}
 
 	public static void main(String[] args) {
