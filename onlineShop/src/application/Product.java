@@ -8,6 +8,8 @@ public class Product {
 	private String imgFileName;
 	private String selectedSize = null;
 	private String selectedColor = null;
+	private String Description;
+	private int Stars;
 
 	public Product() {
 	}
@@ -19,12 +21,14 @@ public class Product {
 		this.Price = price;
 	}
 
-	public Product(Category category, String brand, String name, double price, String imgFileName) {
+	public Product(Category category, String brand, String name, double price, String imgFileName, String description, int stars) {
 		this.Category = category;
 		this.Brand = brand;
 		this.Name = name;
 		this.Price = price;
 		this.imgFileName = imgFileName;
+		this.Description = description;
+		this.Stars = stars;
 	}
 
 	public Category getCategory() {
@@ -83,6 +87,22 @@ public class Product {
 		this.imgFileName = imgFileName;
 	}
 
+	public String getDescription() {
+		return Description;
+	}
+
+	public void setDescription(String description) {
+		Description = description;
+	}
+
+	public int getStars() {
+		return Stars;
+	}
+
+	public void setStars(int stars) {
+		Stars = stars;
+	}
+
 	@Override
 	public boolean equals(Object o) { // equals method in order to check for duplication in the cart
 		if (!(o instanceof Product)) {
@@ -106,5 +126,14 @@ public class Product {
 		this.Price = original.Price;
 		this.imgFileName = original.imgFileName;
 	}
+
+	@Override
+	public String toString() {
+		return "Product [Category=" + Category + ", Brand=" + Brand + ", Name=" + Name + ", Price=" + Price
+				+ ", imgFileName=" + imgFileName + ", selectedSize=" + selectedSize + ", selectedColor=" + selectedColor
+				+ "]";
+	}
+	
+	
 
 }
