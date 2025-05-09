@@ -2,25 +2,34 @@ package application;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.PrintWriter;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.Scanner;
 import java.util.regex.Pattern;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
+import javafx.scene.shape.Circle;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontPosture;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.animation.PauseTransition;
 import javafx.application.Application;
+import javafx.geometry.HPos;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.geometry.Rectangle2D;
+import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.util.Duration;
+import javafx.scene.Cursor;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
+import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
@@ -28,25 +37,34 @@ import javafx.scene.control.PasswordField;
 import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
+import javafx.scene.control.ScrollPane.ScrollBarPolicy;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.Background;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.FlowPane;
+import javafx.scene.layout.GridPane;
+import javafx.beans.binding.Bindings;
+import javafx.event.ActionEvent;
+import javafx.event.EventHandler;
 
 public class Main extends Application {
 
 	ArrayList<Product> Products = new ArrayList<Product>();
 	ArrayList<Product> Cart = new ArrayList<Product>();
+	ArrayList<Category> catList = new ArrayList<Category>();
+	ArrayList<Product> prodList = new ArrayList<Product>();
+	int Total = 0;
 	private static final String IMG_PATH = "file:///C:/Users/moham/eclipse-workspace/onlineShop/src/application/Images/";
+
 	private Stage mainStage;
+
 
 	@Override
 	public void start(Stage primaryStage) {
 		productsList();
 
 		this.mainStage = primaryStage;
-		Font Roboto = Font.loadFont(getClass().getResourceAsStream("Roboto-SemiBold.ttf"), 16);
 
 		VBox Categories = new VBox(15);
 		Categories.setPadding(new Insets(20));
@@ -73,54 +91,34 @@ public class Main extends Application {
 		categoryGrid.setAlignment(Pos.CENTER);
 		categoryGrid.setPrefWrapLength(500);
 
-		Button shoesCategory = new Button("Shoes");
-		shoesCategory.setFont(Font.font("Roboto", FontWeight.BOLD, FontPosture.ITALIC, 15));
-		shoesCategory.setFont(Roboto);
-
-		Button shirtsCategory = new Button("Shirts");
-		shirtsCategory.setFont(Font.font("Roboto", FontWeight.BOLD, FontPosture.ITALIC, 15));
-		shirtsCategory.setFont(Roboto);
-
-		Button pantsCategory = new Button("Pants");
-		pantsCategory.setFont(Font.font("Roboto", FontWeight.BOLD, FontPosture.ITALIC, 15));
-		pantsCategory.setFont(Roboto);
-
 		Button cartButton = new Button("Check your cart - 🛒");
 		applyBtnStyle(cartButton);
 		cartButton.setFont(Font.font("Century", FontWeight.BOLD, FontPosture.ITALIC, 15));
 
-		ImageView shoeCat = new ImageView(new Image(IMG_PATH + "shoe1.png"));
-		shoeCat.setFitWidth(120);
-		shoeCat.setFitHeight(150);
-		shoesCategory.setGraphic(shoeCat);
-		shoesCategory.setBackground(Background.EMPTY);
-		ImageView shirtCat = new ImageView(new Image(IMG_PATH + "shirt1.png"));
-		shirtCat.setFitWidth(120);
-		shirtCat.setFitHeight(150);
-		shirtsCategory.setGraphic(shirtCat);
-		shirtsCategory.setBackground(Background.EMPTY);
-		ImageView pantsCat = new ImageView(new Image(IMG_PATH + "pants1.png"));
-		pantsCat.setFitWidth(120);
-		pantsCat.setFitHeight(150);
-		pantsCategory.setGraphic(pantsCat);
-		pantsCategory.setBackground(Background.EMPTY);
+		for (Category category : catList) {
+			ImageView catimg = new ImageView(IMG_PATH + category.getCatImg());
+			catimg.setFitHeight(150);
+			catimg.setFitWidth(120);
+			Button catBtn = new Button(category.getCatName());
+			catBtn.setGraphic(catimg);
+			applyBtnStyle(catBtn);
+			categoryGrid.getChildren().add(catBtn);
 
-		applyBtnStyle(shoesCategory);
-		applyBtnStyle(shirtsCategory);
-		applyBtnStyle(pantsCategory);
-
-		categoryGrid.getChildren().addAll(shoesCategory, shirtsCategory, pantsCategory);
-
-		shoesCategory.setOnAction(e -> showProducts(primaryStage, "Shoes"));
-		shirtsCategory.setOnAction(e -> showProducts(primaryStage, "Shirts"));
-		pantsCategory.setOnAction(e -> showProducts(primaryStage, "Pants"));
+			catBtn.setOnAction(e -> showProducts(primaryStage, category.getCatName()));
+		}
 		cartButton.setOnAction(e -> showCart(primaryStage));
 
-		Categories.getChildren().addAll(Welcome, label, categoryGrid, cartButton);
+		Button login = new Button("Log In");
+		login.setOnAction(e -> ProfileCreation(primaryStage));
 
-		Scene scene = new Scene(scrollPane, 800, 800);
+		Categories.getChildren().addAll(Welcome, label, categoryGrid, cartButton, login);
+
+		Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();
+		Scene scene = new Scene(scrollPane, screenBounds.getWidth(), screenBounds.getHeight());
 		primaryStage.setScene(scene);
+		primaryStage.setFullScreenExitHint(""); // disables the "Press ESC to exit fullscreen" message
 		primaryStage.setTitle("Shopping site");
+		primaryStage.setFullScreen(true);
 		primaryStage.show();
 
 	}
@@ -130,12 +128,8 @@ public class Main extends Application {
 			return; // to make sure items don't get duplicated after pressing Return and going back
 					// into the same products menu again
 
-		ArrayList<Category> catList = new ArrayList<Category>();
-		ArrayList<Product> prodList = new ArrayList<Product>();
-
 		File catData = new File("C:/Users/moham/eclipse-workspace/onlineShop/src/application/Prod_Info/Categories.txt");
-		try {
-			Scanner catScan = new Scanner(catData);
+		try (Scanner catScan = new Scanner(catData)) {
 			while (catScan.hasNextLine()) {
 				String line = catScan.nextLine();
 				String[] catInfo = line.split("/");
@@ -150,17 +144,18 @@ public class Main extends Application {
 		}
 
 		File prodData = new File("C:/Users/moham/eclipse-workspace/onlineShop/src/application/Prod_Info/Products.txt");
-		try {
-			Scanner prodScan = new Scanner(prodData);
+		try (Scanner prodScan = new Scanner(prodData)) {
 			while (prodScan.hasNextLine()) {
 				String line = prodScan.nextLine();
 				String[] prodInfo = line.split("/");
-				if (prodInfo.length == 5) {
+				if (prodInfo.length == 7) {
 					String categoryName = prodInfo[0];
 					String Brand = prodInfo[1];
 					String Name = prodInfo[2];
 					double Price = Double.parseDouble(prodInfo[3]);
 					String imgFile = prodInfo[4];
+					String Desc = prodInfo[5];
+					int Stars = Integer.parseInt(prodInfo[6]);
 
 					Category matchingCatName = null;
 					for (Category c : catList) {
@@ -170,7 +165,7 @@ public class Main extends Application {
 						}
 					}
 					if (matchingCatName != null) {
-						Product product = new Product(matchingCatName, Brand, Name, Price, imgFile);
+						Product product = new Product(matchingCatName, Brand, Name, Price, imgFile, Desc, Stars);
 						prodList.add(product);
 					} else {
 						System.out.println("Category not found!");
@@ -180,8 +175,419 @@ public class Main extends Application {
 
 		} catch (FileNotFoundException e) {
 			System.err.println("File not found!");
+		} catch (NumberFormatException e) {
+			e.printStackTrace();
 		}
 		Products = prodList; // add all the products from the read file into the Products ArrayList
+	}
+
+	private void ProfileCreation(Stage primaryStage) {
+		ArrayList<User> users = new ArrayList<User>();
+
+		File file = new File("C:/Users/moham/eclipse-workspace/onlineShop/src/application/Prod_Info/USERS.txt");
+		try (Scanner sc = new Scanner(file)) {
+			while (sc.hasNextLine()) {
+				String line = sc.nextLine();
+				String[] array = line.split(" ");
+				String name = array[0];
+				String password = array[1];
+				User u = new User(name, password);
+				users.add(u);
+
+			}
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		}
+		// pane of log in and register
+		GridPane pane1 = new GridPane();
+		pane1.setHgap(5);
+		pane1.setVgap(5);
+		pane1.setPadding(new Insets(10, 10, 10, 10));
+		pane1.setAlignment(Pos.CENTER);
+		pane1.setStyle("-fx-background-color: linear-gradient(to bottom, #ffffff, #cceeff)");
+
+//		Image backgroundImage = new Image(getClass().getResource("/background_image.png").toExternalForm());
+//
+//		// إعداد خلفية الصورة
+//		BackgroundImage background = new BackgroundImage(
+//		    backgroundImage,
+//		    BackgroundRepeat.NO_REPEAT,   
+//		    BackgroundRepeat.NO_REPEAT,
+//		    BackgroundPosition.CENTER,     
+//		    BackgroundSize.DEFAULT         
+//		);
+//		pane1.setBackground(new Background(background));
+//		
+
+		Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();
+		Scene scene = new Scene(pane1, screenBounds.getWidth(), screenBounds.getHeight());
+		// UserName Label
+		Label userName = new Label("Username");
+		userName.setAlignment(Pos.CENTER);
+		GridPane.setHalignment(userName, HPos.CENTER);
+		userName.setMinWidth(300);
+		userName.setMinHeight(50);
+		userName.styleProperty().bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
+				"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 20), 30), "px; "
+
+		));
+		// PassWord label
+		Label passWord = new Label("Password");
+		passWord.setAlignment(Pos.CENTER);
+		GridPane.setHalignment(passWord, HPos.CENTER);
+		passWord.setMinWidth(300);
+		passWord.setMinHeight(50);
+		passWord.styleProperty().bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
+				"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 20), 30), "px; "
+
+		));
+		// Register button
+		Button register = new Button("Don't have an account?\n\t   Register");
+		register.setAlignment(Pos.CENTER);
+		register.setBackground(Background.EMPTY);
+		GridPane.setHalignment(register, HPos.CENTER);
+		register.styleProperty()
+				.bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
+						"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 10), 30),
+						"px; ", "-fx-text-fill: blue;"));
+
+		// Log in button
+		Button login = new Button("Log in");
+		login.setAlignment(Pos.CENTER);
+		GridPane.setHalignment(login, HPos.CENTER);
+		login.styleProperty()
+				.bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
+						"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 10), 30),
+						"px; "));
+
+		// UserName Text Field
+		TextField UNfield = new TextField();
+		UNfield.setPromptText("Enter your username");
+		UNfield.setAlignment(Pos.CENTER);
+		GridPane.setHalignment(UNfield, HPos.CENTER);
+		UNfield.styleProperty()
+				.bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
+						"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 20), 30),
+						"px; "));
+
+		// PassWord Field
+		PasswordField PWfield = new PasswordField();
+		PWfield.setPromptText("Enter your password");
+		PWfield.setAlignment(Pos.CENTER);
+		GridPane.setHalignment(PWfield, HPos.CENTER);
+		PWfield.styleProperty().bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
+				"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 20), 30), "px; "
+
+		));
+
+		// Log in button action
+		login.setOnAction(e -> {
+			if (UNfield.getText().trim().isEmpty()) {
+				Alert UNnull = new Alert(AlertType.WARNING);
+				UNnull.initOwner(primaryStage);
+				UNnull.setTitle("Username empty");
+				UNnull.setHeaderText(null);
+				UNnull.setContentText("Username cannot be empty.");
+				UNnull.showAndWait();
+				return;
+			} else if (PWfield.getText().trim().isEmpty()) {
+				Alert PWnull = new Alert(AlertType.WARNING);
+				PWnull.initOwner(primaryStage);
+				PWnull.setTitle("Password empty");
+				PWnull.setHeaderText(null);
+				PWnull.setContentText("Password cannot be empty.");
+				PWnull.showAndWait();
+				return;
+			}
+
+			else {
+				boolean flage = false;
+				for (User user : users) {
+					if (user.getName().equals(UNfield.getText()) && user.getPassword().equals(PWfield.getText())) {
+						flage = true;
+						break;
+					}
+				}
+				if (!flage) {
+					Alert loginError = new Alert(AlertType.WARNING);
+					loginError.initOwner(primaryStage);
+					loginError.setTitle("Login Error");
+					loginError.setHeaderText(null);
+					loginError.setContentText("Incorrect username or password.");
+					loginError.showAndWait();
+					return;
+				}else {
+					start(primaryStage);
+				}
+
+			}
+
+		});
+
+		/*
+		 * Add to pane1 UserName Label PassWord label Register button UserName Text
+		 * Field PassWord Field
+		 */
+
+		pane1.add(userName, 1, 1);
+		pane1.add(UNfield, 2, 1);
+		pane1.add(passWord, 1, 3);
+		pane1.add(PWfield, 2, 3);
+		pane1.add(login, 2, 5);
+		pane1.add(register, 2, 6);
+
+		// Name label
+		Label Name = new Label("Username");
+		Name.setAlignment(Pos.BASELINE_RIGHT);
+		GridPane.setHalignment(Name, HPos.CENTER);
+		Name.setMinWidth(300);
+		Name.setMinHeight(50);
+		Name.styleProperty().bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
+				"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 15), 20), "px; "
+
+		));
+
+		// PassWord label
+		Label PassWord = new Label("Password");
+		PassWord.setAlignment(Pos.BASELINE_RIGHT);
+		GridPane.setHalignment(PassWord, HPos.CENTER);
+		PassWord.setMinWidth(300);
+		PassWord.setMinHeight(50);
+		PassWord.styleProperty().bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
+				"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 15), 20), "px; "
+
+		));
+
+		// Email label
+		Label email = new Label("Email");
+		email.setAlignment(Pos.BASELINE_RIGHT);
+		GridPane.setHalignment(email, HPos.CENTER);
+		email.setMinWidth(300);
+		email.setMinHeight(50);
+		email.styleProperty().bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
+				"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 15), 20), "px; "
+
+		));
+
+		// PhoneNumber label
+		Label phoneNumber = new Label("Phone Number");
+		phoneNumber.setAlignment(Pos.BASELINE_RIGHT);
+		GridPane.setHalignment(phoneNumber, HPos.CENTER);
+		phoneNumber.setMinWidth(300);
+		phoneNumber.setMinHeight(50);
+		phoneNumber.styleProperty()
+				.bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
+						"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 15), 20),
+						"px; "
+
+				));
+
+		// Name Text Field
+		TextField Nfield = new TextField();
+		Nfield.setPromptText("Enter your username");
+		Nfield.setAlignment(Pos.BASELINE_RIGHT);
+		GridPane.setHalignment(Nfield, HPos.CENTER);
+		Nfield.styleProperty().bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
+				"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 15), 20), "px; "
+
+		));
+
+		// PassWord Field
+		PasswordField pwField = new PasswordField();
+		pwField.setPromptText("Enter your password");
+		pwField.setAlignment(Pos.BASELINE_RIGHT);
+		GridPane.setHalignment(pwField, HPos.CENTER);
+		pwField.styleProperty().bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
+				"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 15), 20), "px; "
+
+		));
+
+		// Password confirmation field
+		PasswordField pwCField = new PasswordField();
+		pwCField.setPromptText("Confirm your password");
+		pwCField.setAlignment(Pos.BASELINE_RIGHT);
+		GridPane.setHalignment(pwCField, HPos.CENTER);
+		pwCField.styleProperty().bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
+				"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 15), 20), "px; "
+
+		));
+
+		// Email Text Field
+		TextField Efield = new TextField();
+		Efield.setPromptText("Enter your email");
+		Efield.setAlignment(Pos.BASELINE_RIGHT);
+		GridPane.setHalignment(Efield, HPos.CENTER);
+		Efield.styleProperty().bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
+				"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 15), 20), "px; "
+
+		));
+
+		// Phone Text Field
+		TextField PHfield = new TextField();
+		PHfield.setPromptText("Enter your phone number");
+		PHfield.setAlignment(Pos.BASELINE_RIGHT);
+		GridPane.setHalignment(PHfield, HPos.CENTER);
+		PHfield.styleProperty().bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
+				"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 15), 20), "px; "
+
+		));
+
+		// Confirm button
+		Button confirm = new Button("Confirm");
+		confirm.setAlignment(Pos.BASELINE_RIGHT);
+		GridPane.setHalignment(confirm, HPos.CENTER);
+		confirm.styleProperty().bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
+				"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 15), 20), "px; "
+
+		));
+
+		// Logo Image
+		ImageView logo = new ImageView(IMG_PATH + "Logo.png");
+		logo.setPreserveRatio(false);
+		logo.setSmooth(true);
+		logo.setCache(true);
+
+		StackPane pane3 = new StackPane(logo);
+
+		// pane2
+		GridPane pane2 = new GridPane();
+		pane2.setHgap(10);
+		pane2.setVgap(10);
+		pane2.setPadding(new Insets(20, 20, 20, 20));
+		pane2.setAlignment(Pos.CENTER_LEFT);
+		pane2.setStyle("-fx-background-color:  #ddceb8");// #ddceb8
+		pane2.add(Name, 3, 1);
+		pane2.add(Nfield, 4, 1);
+		pane2.add(PassWord, 3, 2);
+		pane2.add(pwField, 4, 2);
+		pane2.add(pwCField, 4, 3);
+		pane2.add(email, 3, 4);
+		pane2.add(Efield, 4, 4);
+		pane2.add(phoneNumber, 3, 5);
+		pane2.add(PHfield, 4, 5);
+		pane2.add(confirm, 4, 6);
+
+		HBox box1 = new HBox(pane3, pane2);
+		HBox.setHgrow(logo, Priority.ALWAYS);
+		HBox.setHgrow(pane2, Priority.ALWAYS);
+
+		logo.fitWidthProperty().bind(box1.widthProperty().divide(2));
+		logo.fitHeightProperty().bind(box1.heightProperty());
+
+		// Register button action
+
+		register.setOnAction(new EventHandler<ActionEvent>() {
+
+			@Override
+			public void handle(ActionEvent event) {
+				scene.setRoot(box1);
+
+			}
+
+		});
+
+		// Confirm button action
+		confirm.setOnAction(new EventHandler<ActionEvent>() {
+
+			@Override
+			public void handle(ActionEvent event) {
+				if (Nfield.getText().trim().isEmpty()) {
+					Alert UNnull = new Alert(AlertType.WARNING);
+					UNnull.initOwner(primaryStage);
+					UNnull.setTitle("Username empty");
+					UNnull.setHeaderText(null);
+					UNnull.setContentText("Username cannot be empty.");
+					UNnull.showAndWait();
+					return;
+				}
+
+				if (pwField.getText().trim().isEmpty()) {
+					Alert PWnull = new Alert(AlertType.WARNING);
+					PWnull.initOwner(primaryStage);
+					PWnull.setTitle("Password empty");
+					PWnull.setHeaderText(null);
+					PWnull.setContentText("Password cannot be empty.");
+					PWnull.showAndWait();
+					return;
+				}
+				if (pwCField.getText().trim().isEmpty()) {
+					Alert PWnull = new Alert(AlertType.WARNING);
+					PWnull.initOwner(primaryStage);
+					PWnull.setTitle("Confirm Password empty");
+					PWnull.setHeaderText(null);
+					PWnull.setContentText("Please confirm your password");
+					PWnull.showAndWait();
+					return;
+				}
+				if (Efield.getText().trim().isEmpty()) {
+					Alert emailNull = new Alert(AlertType.WARNING);
+					emailNull.initOwner(primaryStage);
+					emailNull.setTitle("Email empty");
+					emailNull.setHeaderText(null);
+					emailNull.setContentText("Email cannot be empty.");
+					emailNull.showAndWait();
+					return;
+				}
+				if (PHfield.getText().trim().isEmpty()) {
+					Alert PHnull = new Alert(AlertType.WARNING);
+					PHnull.initOwner(primaryStage);
+					PHnull.setTitle("Phone Number empty");
+					PHnull.setHeaderText(null);
+					PHnull.setContentText("Phone Number cannot be empty.");
+					PHnull.showAndWait();
+					return;
+				}
+				if (!(pwField.getText().trim().equals(pwCField.getText().trim()))) {
+					Alert equalPassWord = new Alert(AlertType.WARNING);
+					equalPassWord.initOwner(primaryStage);
+					equalPassWord.setTitle("Mismatch passwords");
+					equalPassWord.setHeaderText(null);
+					equalPassWord.setContentText("Passwords do not match. Please try again.");
+					equalPassWord.showAndWait();
+					return;
+				}
+
+				for (User user : users) {
+					if (user.getName().equals(Nfield.getText()) && user.getPassword().equals(pwField.getText())) {
+
+						Alert accountExist = new Alert(AlertType.WARNING);
+						accountExist.initOwner(primaryStage);
+						accountExist.setTitle("Account Exists");
+						accountExist.setHeaderText(null);
+						accountExist.setContentText("This account already exists.");
+						accountExist.showAndWait();
+						return;
+					}
+				}
+
+				users.add(new User(Nfield.getText(), pwField.getText()));
+				Alert accountCreated = new Alert(AlertType.INFORMATION);
+				accountCreated.initOwner(primaryStage);
+				accountCreated.setTitle("Account Created");
+				accountCreated.setHeaderText(null);
+				accountCreated.setContentText("Account created successfully!");
+				accountCreated.showAndWait();
+
+				try {
+					PrintWriter writer = new PrintWriter(
+							"C:/Users/moham/eclipse-workspace/onlineShop/src/application/Prod_Info/USERS.txt");
+					for (int i = 0; i < users.size(); i++) {
+
+						writer.println(users.get(i).toString());
+					}
+					writer.close();
+				} catch (FileNotFoundException e) {
+
+					e.printStackTrace();
+				}
+			}
+
+		});
+
+		primaryStage.setScene(scene);
+		primaryStage.setFullScreenExitHint("");
+		primaryStage.setFullScreen(true);
+		primaryStage.show();
 	}
 
 	private void showProducts(Stage primaryStage, String category) {
@@ -193,7 +599,7 @@ public class Main extends Application {
 				+ "-fx-effect: dropshadow(gaussian, #ffffff, 3, 0, -2, -2),"
 				+ "            dropshadow(gaussian, #c0c0c0, 3, 0, 2, 2);");
 
-		Button returnButton = new Button("Return");
+		Button returnButton = new Button("<- Back");
 		applyBtnStyle(returnButton);
 		returnButton.setOnAction(e -> start(primaryStage));
 
@@ -201,17 +607,17 @@ public class Main extends Application {
 		applyBtnStyle(cartButton);
 		cartButton.setOnAction(e -> showCart(primaryStage));
 
-		BorderPane btnLayout = new BorderPane();
-		btnLayout.setPadding(new Insets(10, 20, 10, 20));
-		btnLayout.setLeft(returnButton);
-		btnLayout.setRight(cartButton);
+		BorderPane topLayout = new BorderPane();
+		topLayout.setPadding(new Insets(10, 20, 10, 20));
+		topLayout.setLeft(returnButton);
+		topLayout.setRight(cartButton);
 
 		Label catTitle = new Label(category);
-		catTitle.setFont(Font.font("", FontWeight.EXTRA_BOLD, 25));
+		catTitle.setFont(Font.font("Trebuchet MS", FontWeight.EXTRA_BOLD, 25));
 		catTitle.setUnderline(true);
-		btnLayout.setCenter(catTitle);
+		topLayout.setCenter(catTitle);
 
-		productListContainer.getChildren().add(btnLayout);
+		productListContainer.getChildren().add(topLayout);
 
 		FlowPane productList = new FlowPane();
 		productList.setHgap(30);
@@ -247,9 +653,18 @@ public class Main extends Application {
 			Label prodName = new Label("Product Name: " + product.getName() + "\nPrice: $" + product.getPrice());
 			prodName.setFont(Font.font("Century", FontWeight.BOLD, 15));
 
-			ImageView img = new ImageView(new Image(IMG_PATH + product.getImgFileName()));
+			ImageView img = new ImageView(IMG_PATH + product.getImgFileName());
 			img.setFitWidth(150);
 			img.setFitHeight(150);
+			img.setOnMouseEntered(e -> {
+				img.setScaleX(1.05);
+				img.setScaleY(1.05);
+			});
+			img.setOnMouseExited(e -> {
+				img.setScaleX(1.0);
+				img.setScaleY(1.0);
+			});
+			img.setOnMouseClicked(e -> showProductDetails(primaryStage, product));
 
 			ComboBox<String> sizeBox = new ComboBox<String>();
 			sizeBox.setPromptText("Size");
@@ -261,7 +676,7 @@ public class Main extends Application {
 
 			ComboBox<String> colorBox = new ComboBox<String>();
 			colorBox.setPromptText("Color");
-			colorBox.getItems().addAll("Black", "Red", "Blue", "Yellow");
+			colorBox.getItems().addAll("Black", "Red", "Blue", "Green");
 
 			Text FAIL = new Text("");
 			FAIL.setFill(Color.TRANSPARENT);
@@ -398,9 +813,252 @@ public class Main extends Application {
 
 		}
 
-		Scene productScene = new Scene(scrollPane, 800, 800);
+		Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();
+		Scene productScene = new Scene(scrollPane, screenBounds.getWidth(), screenBounds.getHeight());
 		primaryStage.setScene(productScene);
+		primaryStage.setFullScreenExitHint("");
+		primaryStage.setFullScreen(true);
 
+	}
+
+	private void showProductDetails(Stage primaryStage, Product product) {
+
+		VBox detailLayout = new VBox(30);
+		detailLayout.setPadding(new Insets(20));
+		detailLayout.setAlignment(Pos.TOP_CENTER);
+		detailLayout.setStyle("-fx-background-color: #e0e0e0;" + "-fx-border-color: transparent;"
+				+ "-fx-effect: dropshadow(gaussian, #ffffff, 3, 0, -2, -2),"
+				+ "            dropshadow(gaussian, #c0c0c0, 3, 0, 2, 2);");
+
+		BorderPane topLayout = new BorderPane();
+		topLayout.setPadding(new Insets(10, 20, 10, 20));
+
+		Button returnBtn = new Button("<- Back");
+		returnBtn.setOnAction(e -> showProducts(primaryStage, product.getCategory().getCatName()));
+		applyBtnStyle(returnBtn);
+
+		Label itemTitle = new Label(product.getName());
+		itemTitle.setFont(Font.font("Trebuchet MS", FontWeight.EXTRA_BOLD, 25));
+		itemTitle.setUnderline(true);
+
+		topLayout.setCenter(itemTitle);
+		topLayout.setLeft(returnBtn);
+
+		HBox itemLayout = new HBox(10);
+
+		ImageView itemImg = new ImageView(IMG_PATH + product.getImgFileName());
+
+		itemImg.setFitWidth(250);
+		itemImg.setFitHeight(250);
+
+		VBox DescRev = new VBox(20);
+
+		Text Description = new Text("Description:\n" + product.getDescription());
+		Description.setWrappingWidth(400);
+		Description.setFont(Font.font("Trebuchet MS", FontWeight.BOLD, 15));
+		Text Stars = new Text("\t ");
+		for (int i = 0; i < product.getStars(); i++) {
+			Stars.setText(Stars.getText() + "★");
+		}
+		for (int i = 0; i < 5 - product.getStars(); i++) {
+			Stars.setText(Stars.getText() + "☆");
+		}
+		Stars.setText(Stars.getText() + "  (1000+ reviews)\n\n\n");
+		Stars.setFill(Color.GOLDENROD);
+		Stars.setScaleX(1.5);
+		Stars.setScaleY(1.5);
+
+		// this HBox will hold all the color options horizontally
+		HBox COLORS = new HBox(30); // spacing between each color circle is 30px
+
+		Label colorLabel = new Label("Colors:");
+		colorLabel.setFont(Font.font("Trebuchet MS", FontWeight.BOLD, FontPosture.ITALIC, 15));
+
+		// these are the actual names we’ll use when assigning the selected color to the
+		// product
+		String[] colorNames = { "Black", "Red", "Blue", "Green" };
+
+		// these are the real JavaFX color values that match the above names
+		Color[] Colors = { Color.BLACK, Color.RED, Color.BLUE, Color.DARKOLIVEGREEN };
+
+		VBox C = new VBox(10);
+		C.getChildren().addAll(colorLabel, COLORS);
+
+		// this lil array keeps track of the currently selected circle (only one at a
+		// time)
+		final Circle[] selectedCircle = new Circle[1];
+
+		// loop through the color options to create a colored circle for each one
+		for (int i = 0; i < colorNames.length; i++) {
+			Circle circle = new Circle(15);
+			circle.setFill(Colors[i]); // fill it with the corresponding color
+			circle.setStrokeWidth(0); // no border at first
+
+			// putting the circle inside a StackPane so we can easily click it and style it
+			StackPane circlePane = new StackPane(circle);
+			circlePane.setCursor(Cursor.HAND); // make it feel clickable (more like a button object and not just a
+												// circle)
+
+			int finalI = i; // needed to use inside the lambda below
+
+			// when user clicks a circle
+			circlePane.setOnMouseClicked(e -> {
+				// remove the border from the previously selected circle if there was one
+				if (selectedCircle[0] != null) {
+					selectedCircle[0].setStrokeWidth(0);
+				}
+
+				// now mark this circle as the selected one and add a visible border to it
+				selectedCircle[0] = circle;
+				circle.setStroke(Color.DARKSLATEGREY);
+				circle.setStrokeWidth(3.2);
+
+				// actually set the product's selectedColor property to the one the user clicked
+				product.setSelectedColor(colorNames[finalI]);
+			});
+
+			// finally, add the colored circle button to the row
+			COLORS.getChildren().add(circlePane);
+		}
+
+		// same idea now but for sizes
+		HBox SIZES = new HBox(30); // holds the size buttons with spacing
+		Label sizeLabel = new Label("Sizes:");
+		sizeLabel.setFont(Font.font("Trebuchet MS", FontWeight.BOLD, FontPosture.ITALIC, 15));
+
+		VBox SI = new VBox(10);
+		SI.getChildren().addAll(sizeLabel, SIZES);
+
+		// check if it's a shoe, if yes show numbers, if not show S, M, L, XL
+		String[] sizes;
+		if (!product.getCategory().getCatName().equalsIgnoreCase("shoes")) {
+			sizes = new String[] { "S", "M", "L", "XL" };
+		} else {
+			sizes = new String[] { "34", "36", "38", "40" };
+		}
+
+		// use this to keep track of which size button is currently selected
+		Button[] sizeButtons = new Button[sizes.length];
+		final Button[] selectedSizeBtn = new Button[1];
+
+		// loop through the sizes and create a button for each one
+		for (int i = 0; i < sizes.length; i++) {
+			String size = sizes[i];
+			Button sizeBtn = new Button(size);
+			applyBtnStyle(sizeBtn);
+			sizeButtons[i] = sizeBtn;
+
+			// when user clicks on a size
+			sizeBtn.setOnAction(e -> {
+				// update the product’s selected size
+				product.setSelectedSize(size);
+
+				// remove the "selected" look from the previously selected button
+				if (selectedSizeBtn[0] != null) {
+					selectedSizeBtn[0].getStyleClass().remove("selected-btn");
+					applyBtnStyle(selectedSizeBtn[0]); // reset it to normal
+				}
+
+				// apply a special style to show this button is now selected
+				sizeBtn.getStyleClass().add("selected-btn");
+				sizeBtn.setStyle("-fx-background-color: #000000; -fx-text-fill: #ffffff; "
+						+ "-fx-background-radius: 12; -fx-border-radius: 12; -fx-padding: 10 20; -fx-cursor: hand;");
+				selectedSizeBtn[0] = sizeBtn;
+			});
+
+			// add this button to the size row
+			SIZES.getChildren().add(sizeBtn);
+		}
+
+		Button addtoCart = new Button("Add to cart - 🛒");
+		addtoCart.setStyle("-fx-background-color: #000000;" + "-fx-text-fill: #FFFFFF;" + "-fx-background-radius: 12;"
+				+ "-fx-border-radius: 12;" + "-fx-padding: 10 20;" + "-fx-cursor: hand;"
+				+ "-fx-effect: dropshadow(gaussian, #b0b0b0, 6, 0, 2, 2),"
+				+ "            dropshadow(gaussian, #ffffff, 6, 0, -2, -2);");
+		addtoCart.setPrefSize(400, 75);
+		addtoCart.setFont(Font.font("Trebuchet MS", FontWeight.BOLD, 20));
+		addtoCart.setOnMouseEntered(e -> {
+			addtoCart.setScaleX(1.03);
+			addtoCart.setScaleY(1.03);
+		});
+		addtoCart.setOnMouseExited(e -> {
+			addtoCart.setScaleX(1);
+			addtoCart.setScaleY(1);
+		});
+
+		Text FAIL = new Text("");
+		FAIL.setFill(Color.TRANSPARENT);
+		FAIL.setFont(Font.font("Book Antiqua", 15));
+
+		VBox recommendedTab = new VBox(10);
+
+		Label recomTitle = new Label("Recommended Items:");
+		recomTitle.setFont(Font.font("Trebuchet MS", FontWeight.BOLD, 15));
+
+		HBox recomItems = new HBox(20);
+		ArrayList<Integer> usedItems = new ArrayList<>();
+
+		int maxItems = Math.min(10, prodList.size());
+		while (usedItems.size() < maxItems) {
+			int rand = (int) (Math.random() * prodList.size());
+
+			boolean alreadyUsed = false;
+			for (int used : usedItems) {
+				if (used == rand) {
+					alreadyUsed = true;
+					break;
+				}
+			}
+
+			if (alreadyUsed)
+				continue;
+			usedItems.add(rand);
+
+			VBox recomCard = new VBox();
+			recomCard.setAlignment(Pos.CENTER);
+
+			Label recomName = new Label(prodList.get(rand).getName());
+			recomName.setFont(Font.font("Trebuchet MS", FontWeight.BOLD, 10));
+
+			ImageView recomImg = new ImageView(IMG_PATH + prodList.get(rand).getImgFileName());
+			recomImg.setFitHeight(150);
+			recomImg.setPreserveRatio(true);
+			recomImg.setOnMouseEntered(
+					e -> recomImg.setStyle("-fx-effect: dropshadow(gaussian, #888888, 10, 0.5, 0, 0);"));
+			recomImg.setOnMouseExited(e -> recomImg.setStyle(""));
+
+			recomCard.setOnMouseClicked(e -> showProductDetails(primaryStage, prodList.get(rand)));
+
+			recomCard.getChildren().addAll(recomImg, recomName);
+
+			recomItems.getChildren().add(recomCard);
+		}
+
+		ScrollPane scrollPane = new ScrollPane();
+		scrollPane.setContent(recomItems);
+		scrollPane.setStyle("-fx-background: #e0e0e0; -fx-border-color: transparent;"
+				+ "-fx-effect: dropshadow(gaussian, #ffffff, 3, 0, -2, -2),"
+				+ "            dropshadow(gaussian, #c0c0c0, 3, 0, 2, 2);");
+		scrollPane.setFitToWidth(true);
+		scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.ALWAYS);
+		scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+		scrollPane.setPrefHeight(200);
+
+		addtoCart.setOnAction(
+				e -> tryAddToCart(product, product.getSelectedSize(), product.getSelectedColor(), 1, FAIL));
+
+		recommendedTab.getChildren().addAll(recomTitle, scrollPane);
+
+		DescRev.getChildren().addAll(Description, Stars, C, SI, addtoCart, FAIL);
+
+		itemLayout.getChildren().addAll(itemImg, DescRev);
+
+		detailLayout.getChildren().addAll(topLayout, itemLayout, recommendedTab);
+
+		Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();
+		Scene detailScene = new Scene(detailLayout, screenBounds.getWidth(), screenBounds.getHeight());
+		primaryStage.setScene(detailScene);
+		primaryStage.setFullScreen(true);
 	}
 
 	private void showCart(Stage primaryStage) {
@@ -412,6 +1070,7 @@ public class Main extends Application {
 			emptyCart.showAndWait();
 			return;
 		}
+		Total = 0;
 
 		FlowPane cartItemsFlow = new FlowPane();
 		cartItemsFlow.setHgap(30);
@@ -432,14 +1091,13 @@ public class Main extends Application {
 
 		ScrollPane scrollPane = new ScrollPane();
 		scrollPane.setContent(cartContainer);
+		scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
 		scrollPane.setStyle("-fx-background: #e0e0e0; -fx-border-color: transparent;"
 				+ "-fx-effect: dropshadow(gaussian, #ffffff, 3, 0, -2, -2),"
 				+ "            dropshadow(gaussian, #c0c0c0, 3, 0, 2, 2);");
 
 		scrollPane.setFitToWidth(true);
 		scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.ALWAYS);
-
-		int Total = 0;
 
 		ArrayList<Product> printedItems = new ArrayList<Product>();
 
@@ -504,10 +1162,12 @@ public class Main extends Application {
 
 		cartContainer.getChildren().add(cartTotal);
 
-		Scene itemScene = new Scene(scrollPane, 800, 800);
+		Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();
+		Scene itemScene = new Scene(scrollPane, screenBounds.getWidth(), screenBounds.getHeight());
 		primaryStage.setScene(itemScene);
+		primaryStage.setFullScreen(true);
 
-		Button returnBtn = new Button("Return");
+		Button returnBtn = new Button("<- Back");
 		returnBtn.setOnAction(e -> showProducts(primaryStage, Cart.get(Cart.size() - 1).getCategory().getCatName()));
 
 		Button clearBtn = new Button("Clear your cart - \uD83D\uDDD1");
@@ -548,11 +1208,11 @@ public class Main extends Application {
 		BorderPane COLayoutTitle = new BorderPane();
 		COLayoutTitle.setPadding(new Insets(10, 20, 10, 20));
 
-		Button returnBtn = new Button("Return");
+		Button returnBtn = new Button("<- Back");
 		returnBtn.setOnAction(e -> showCart(primaryStage));
 		applyBtnStyle(returnBtn);
 
-		Label COTitle = new Label("Check Out              ");
+		Label COTitle = new Label("Check Out\n" + "Total: $" + Total + "                 ");
 		COTitle.setFont(Font.font("", FontWeight.EXTRA_BOLD, 25));
 
 		COLayoutTitle.setRight(COTitle);
@@ -573,6 +1233,7 @@ public class Main extends Application {
 				"-fx-border-color: #ccc; -fx-border-radius: 10; -fx-background-radius: 10; -fx-background-color: #f9f9f9;");
 		scrollPane.setPrefWidth(390);
 		scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+		scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
 		scrollPane.setBackground(Background.EMPTY);
 
 		ArrayList<Product> printedItems = new ArrayList<Product>();
@@ -633,12 +1294,40 @@ public class Main extends Application {
 		creditDate.setPromptText("MM/YY");
 		TextField creditCVC = new TextField("");
 		creditCVC.setPromptText("CVC");
+		Button creditConfirm = new Button("Confirm");
+		applyBtnStyle(creditConfirm);
 
 		Button creditCard = new Button("Credit Card");
 		applyBtnStyle(creditCard);
 
 		creditCard.setOnAction(e -> {
-			userInfo.getChildren().addAll(creditNum, creditDate, creditCVC);
+			userInfo.getChildren().addAll(creditNum, creditDate, creditCVC, creditConfirm);
+		});
+
+		creditConfirm.setOnAction(e -> {
+			String creditDateRegex = "^(0[1-9]|1[0-2])/\\d{2}$";
+			if (creditNum.getText().length() == 16 && creditDate.getText().matches(creditDateRegex)
+					&& creditCVC.getText().length() == 3) {
+				String[] parts = creditDate.getText().split("/");
+				int month = Integer.parseInt(parts[0]);
+				int year = Integer.parseInt(parts[1]);
+
+				if (month >= 5 && year >= 25 || month >= 0 && year > 25) {
+					showConfirmation(primaryStage);
+				} else {
+					Alert failAlert = new Alert(Alert.AlertType.ERROR);
+					failAlert.setTitle("Error");
+					failAlert.setHeaderText(null);
+					failAlert.setContentText("Credit card expired!");
+					failAlert.showAndWait();
+				}
+			} else {
+				Alert failAlert = new Alert(Alert.AlertType.ERROR);
+				failAlert.setTitle("Error");
+				failAlert.setHeaderText(null);
+				failAlert.setContentText("There's an error in your information. Please try again.");
+				failAlert.showAndWait();
+			}
 		});
 
 		VBox payMethodInfo = new VBox(10);
@@ -666,12 +1355,11 @@ public class Main extends Application {
 			PasswordField payPalPass = new PasswordField();
 			payPalPass.setPromptText("Password");
 
+			payPalPass.setOnAction(b -> payPalCheck(payPalStage, payPalEmail, payPalPass));
+
 			Button Confirm = new Button("Confirm");
 
-			Confirm.setOnAction(b -> {
-				payPalCheck(payPalStage, payPalEmail, payPalPass);
-
-			});
+			Confirm.setOnAction(b -> payPalCheck(payPalStage, payPalEmail, payPalPass));
 
 			payPalLogin.getChildren().addAll(payPalEmail, payPalPass, Confirm);
 
@@ -692,8 +1380,10 @@ public class Main extends Application {
 
 		COLayoutFULL.getChildren().addAll(COLayoutTitle, COLayout);
 
-		Scene COscene = new Scene(COLayoutFULL, 800, 800);
+		Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();
+		Scene COscene = new Scene(COLayoutFULL, screenBounds.getWidth(), screenBounds.getHeight());
 		primaryStage.setScene(COscene);
+		primaryStage.setFullScreen(true);
 
 	}
 
@@ -842,29 +1532,41 @@ public class Main extends Application {
 
 		layout.getChildren().addAll(itemRecap, thankYou, details, returnBtn);
 
-		Scene scene = new Scene(layout, 800, 800);
-		primaryStage.setScene(scene);
+		Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();
+		Scene confirmScene = new Scene(layout, screenBounds.getWidth(), screenBounds.getHeight());
+		primaryStage.setScene(confirmScene);
+		primaryStage.setFullScreen(true);
 	}
 
 	private void applyBtnStyle(Button button) {
-		button.setStyle("-fx-background-color: #e0e0e0;" + "-fx-text-fill: #333333;" + "-fx-font-weight: bold;"
-				+ "-fx-background-radius: 12;" + "-fx-border-radius: 12;" + "-fx-padding: 10 20;" + "-fx-cursor: hand;"
+		if (button.getStyleClass().contains("selected-btn"))
+			return; // don't override selected
+
+		button.setFont(Font.font("Trebuchet MS", FontWeight.BOLD, FontPosture.ITALIC, 15));
+		button.setStyle("-fx-background-color: #e0e0e0;" + "-fx-text-fill: #333333;" + "-fx-background-radius: 12;"
+				+ "-fx-border-radius: 12;" + "-fx-padding: 10 20;" + "-fx-cursor: hand;"
 				+ "-fx-effect: dropshadow(gaussian, #ffffff, 4, 0, -2, -2),"
 				+ "            dropshadow(gaussian, #c0c0c0, 4, 0, 2, 2);");
 
 		button.setOnMouseEntered(e -> {
-			button.setStyle("-fx-background-color: #d1d1d1;" + "-fx-text-fill: #333333;" + "-fx-font-weight: bold;"
-					+ "-fx-background-radius: 12;" + "-fx-border-radius: 12;" + "-fx-padding: 10 20;"
-					+ "-fx-cursor: hand;" + "-fx-effect: dropshadow(gaussian, #b0b0b0, 6, 0, 2, 2),"
+			if (button.getStyleClass().contains("selected-btn"))
+				return;
+
+			button.setStyle("-fx-background-color: #d1d1d1;" + "-fx-text-fill: #333333;" + "-fx-background-radius: 12;"
+					+ "-fx-border-radius: 12;" + "-fx-padding: 10 20;" + "-fx-cursor: hand;"
+					+ "-fx-effect: dropshadow(gaussian, #b0b0b0, 6, 0, 2, 2),"
 					+ "            dropshadow(gaussian, #ffffff, 6, 0, -2, -2);");
 			button.setScaleX(1.05);
 			button.setScaleY(1.05);
 		});
 
 		button.setOnMouseExited(e -> {
-			button.setStyle("-fx-background-color: #e0e0e0;" + "-fx-text-fill: #333333;" + "-fx-font-weight: bold;"
-					+ "-fx-background-radius: 12;" + "-fx-border-radius: 12;" + "-fx-padding: 10 20;"
-					+ "-fx-cursor: hand;" + "-fx-effect: dropshadow(gaussian, #ffffff, 4, 0, -2, -2),"
+			if (button.getStyleClass().contains("selected-btn"))
+				return;
+
+			button.setStyle("-fx-background-color: #e0e0e0;" + "-fx-text-fill: #333333;" + "-fx-background-radius: 12;"
+					+ "-fx-border-radius: 12;" + "-fx-padding: 10 20;" + "-fx-cursor: hand;"
+					+ "-fx-effect: dropshadow(gaussian, #ffffff, 4, 0, -2, -2),"
 					+ "            dropshadow(gaussian, #c0c0c0, 4, 0, 2, 2);");
 			button.setScaleX(1.0);
 			button.setScaleY(1.0);
