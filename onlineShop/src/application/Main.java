@@ -10,14 +10,17 @@ import java.util.regex.Pattern;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
+import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontPosture;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.animation.PauseTransition;
+import javafx.animation.TranslateTransition;
 import javafx.application.Application;
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
@@ -45,6 +48,8 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.GridPane;
 import javafx.beans.binding.Bindings;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
 
@@ -59,68 +64,286 @@ public class Main extends Application {
 
 	private Stage mainStage;
 
+	private FlowPane productGrid;
+	private VBox drawerMenu;
+	private boolean isDrawerOpen = false;
+	private Rectangle overlay;
 
 	@Override
 	public void start(Stage primaryStage) {
+		this.mainStage = primaryStage;
 		productsList();
 
-		this.mainStage = primaryStage;
+		BorderPane mainPane = new BorderPane();
+		HBox topBar = createTopBar(primaryStage);
+		mainPane.setTop(topBar);
 
-		VBox Categories = new VBox(15);
-		Categories.setPadding(new Insets(20));
-		Categories.setStyle("-fx-background-color: #e0e0e0;" + "-fx-border-color: transparent;"
-				+ "-fx-effect: dropshadow(gaussian, #ffffff, 3, 0, -2, -2),"
-				+ "            dropshadow(gaussian, #c0c0c0, 3, 0, 2, 2);");
-		Categories.setAlignment(Pos.TOP_CENTER);
+		drawerMenu = createDrawerMenu(primaryStage);
+		drawerMenu.setTranslateX(-8000); // Start off-screen to the left
 
-		ScrollPane scrollPane = new ScrollPane();
-		scrollPane.setContent(Categories);
+		productGrid = createProductGrid(getRandomProducts(20));
+		ScrollPane scrollPane = new ScrollPane(productGrid);
+		scrollPane.setBackground(Background.EMPTY);
 		scrollPane.setFitToWidth(true);
-		scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.ALWAYS);
+		scrollPane.setStyle("-fx-background: #e0e0e0; -fx-border-color: transparent;"
+				+ "-fx-effect: dropshadow(gaussian, #ffffff, 3, 0, -2, -2),"
+				+ "dropshadow(gaussian, #c0c0c0, 3, 0, 2, 2);");
 
-		Label Welcome = new Label("Welcome to our store!");
-		Welcome.setFont(Font.font("Book Antiqua", FontWeight.BOLD, 30));
+		VBox centerContent = new VBox(scrollPane);
+		centerContent.setAlignment(Pos.CENTER_RIGHT);
+		centerContent.setPadding(new Insets(20));
+		mainPane.setCenter(centerContent);
+		mainPane.setStyle("-fx-background-color: #e0e0e0;");
 
-		Label label = new Label("Choose a category:");
-		label.setFont(Font.font("Book Antiqua", FontWeight.BOLD, 20));
+		overlay = new Rectangle();
+		overlay.setFill(Color.rgb(0, 0, 0, 0.2));
+		overlay.setVisible(false);
+		overlay.setOnMouseClicked(e -> toggleDrawer());
 
-		FlowPane categoryGrid = new FlowPane();
-		categoryGrid.setHgap(40);
-		categoryGrid.setVgap(40);
-		categoryGrid.setPadding(new Insets(20));
-		categoryGrid.setAlignment(Pos.CENTER);
-		categoryGrid.setPrefWrapLength(500);
+		StackPane root = new StackPane(mainPane, overlay, drawerMenu);
+		Scene scene = new Scene(root, 1000, 600);
+		drawerMenu.prefWidthProperty().bind(scene.widthProperty().add(800));
+		drawerMenu.translateYProperty().bind(scene.heightProperty().multiply(0.05));
+		overlay.widthProperty().bind(scene.widthProperty());
+		overlay.heightProperty().bind(scene.heightProperty());
 
-		Button cartButton = new Button("Check your cart - 🛒");
-		applyBtnStyle(cartButton);
-		cartButton.setFont(Font.font("Century", FontWeight.BOLD, FontPosture.ITALIC, 15));
-
-		for (Category category : catList) {
-			ImageView catimg = new ImageView(IMG_PATH + category.getCatImg());
-			catimg.setFitHeight(150);
-			catimg.setFitWidth(120);
-			Button catBtn = new Button(category.getCatName());
-			catBtn.setGraphic(catimg);
-			applyBtnStyle(catBtn);
-			categoryGrid.getChildren().add(catBtn);
-
-			catBtn.setOnAction(e -> showProducts(primaryStage, category.getCatName()));
-		}
-		cartButton.setOnAction(e -> showCart(primaryStage));
-
-		Button login = new Button("Log In");
-		login.setOnAction(e -> ProfileCreation(primaryStage));
-
-		Categories.getChildren().addAll(Welcome, label, categoryGrid, cartButton, login);
-
-		Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();
-		Scene scene = new Scene(scrollPane, screenBounds.getWidth(), screenBounds.getHeight());
 		primaryStage.setScene(scene);
-		primaryStage.setFullScreenExitHint(""); // disables the "Press ESC to exit fullscreen" message
-		primaryStage.setTitle("Shopping site");
+		primaryStage.setTitle("Jothoor Shopping App");
+		primaryStage.setFullScreenExitHint("");
 		primaryStage.setFullScreen(true);
 		primaryStage.show();
+	}
 
+	private HBox createTopBar(Stage stage) {
+		Button menuBtn = new Button("≡");
+		menuBtn.setOnAction(e -> toggleDrawer());
+
+		TextField searchField = new TextField();
+		searchField.setPromptText("Search for a product...");
+		searchField.setPrefWidth(300);
+		searchField.textProperty().addListener((obs, oldText, newText) -> {
+			ArrayList<Product> filtered = new ArrayList<>();
+			for (Product p : prodList) {
+				if (p.getName().toLowerCase().contains(newText.toLowerCase())) {
+					filtered.add(p);
+				}
+			}
+			updateProductGrid(productGrid, filtered);
+		});
+
+		Region spacer = new Region();
+		HBox.setHgrow(spacer, Priority.ALWAYS);
+
+		HBox topBar = new HBox(10, menuBtn, searchField, spacer);
+		topBar.setPadding(new Insets(10));
+		topBar.setAlignment(Pos.CENTER_LEFT);
+		topBar.setStyle("-fx-background-color: #e0e0e0; -fx-border-color: transparent;"
+				+ "-fx-effect: dropshadow(gaussian, #ffffff, 3, 0, -2, -2),"
+				+ "dropshadow(gaussian, #c0c0c0, 3, 0, 2, 2);");
+		return topBar;
+	}
+
+	private VBox createDrawerMenu(Stage stage) {
+		VBox drawer = new VBox();
+		drawer.setSpacing(10);
+		drawer.setPadding(new Insets(20));
+		drawer.setMaxWidth(300);
+		drawer.setStyle("-fx-background-color: #f0f0f0; -fx-border-color: #ccc;");
+
+		Button profileBtn = new Button("Profile");
+		profileBtn.setShape(new Circle(30));
+		profileBtn.setMinSize(60, 60);
+		profileBtn.setMaxSize(60, 60);
+		profileBtn.setStyle("-fx-background-color: #66c2ff; -fx-text-fill: white;");
+		profileBtn.setOnAction(e -> ProfileCreation(mainStage));
+		drawer.getChildren().add(profileBtn);
+
+		Label title = new Label("CATEGORIES");
+		title.setTextFill(Color.BLACK);
+		title.setFont(Font.font(16));
+		drawer.getChildren().add(title);
+
+		for (Category category : catList) {
+			Button btn = new Button(category.getCatName());
+			btn.setStyle("-fx-background-color: transparent; -fx-text-fill: #444; -fx-font-size: 14;");
+			btn.setOnAction(e -> {
+				showProducts(mainStage, category.getCatName());
+				toggleDrawer();
+			});
+			drawer.getChildren().add(btn);
+		}
+
+		return drawer;
+	}
+
+	private void toggleDrawer() {
+		TranslateTransition transition = new TranslateTransition(Duration.millis(150), drawerMenu);
+		if (isDrawerOpen) {
+			transition.setToX(-1500);
+			overlay.setVisible(false);
+		} else {
+			transition.setToX(-600);
+			overlay.setVisible(true);
+		}
+		isDrawerOpen = !isDrawerOpen;
+		transition.play();
+	}
+
+	private FlowPane createProductGrid(ArrayList<Product> items) {
+		FlowPane grid = new FlowPane();
+		grid.setPadding(new Insets(30));
+		grid.setHgap(30);
+		grid.setVgap(30);
+		updateProductGrid(grid, items);
+		return grid;
+	}
+
+	private void updateProductGrid(FlowPane grid, ArrayList<Product> items) {
+		grid.getChildren().clear();
+
+		ArrayList<Product> printItems = new ArrayList<Product>();
+
+		for (Product product : items) {
+			if (!printItems.contains(product)) {
+				printItems.add(product);
+				VBox productCard = new VBox(10);
+				productCard.setAlignment(Pos.CENTER);
+				productCard.setPadding(new Insets(10));
+				productCard.setStyle(
+						"-fx-border-color: #ccc; -fx-border-radius: 10; -fx-background-radius: 10; -fx-background-color: #f9f9f9;");
+				productCard.setPrefWidth(250);
+
+				Label prodName = new Label("Product Name: " + product.getName() + "\nPrice: $" + product.getPrice());
+				prodName.setFont(Font.font("Century", FontWeight.BOLD, 15));
+				prodName.setTextFill(Color.BLACK);
+
+				ImageView img = new ImageView(IMG_PATH + product.getImgFileName());
+				img.setFitWidth(150);
+				img.setFitHeight(150);
+				img.setOnMouseEntered(e -> {
+					img.setScaleX(1.05);
+					img.setScaleY(1.05);
+				});
+				img.setOnMouseExited(e -> {
+					img.setScaleX(1.0);
+					img.setScaleY(1.0);
+				});
+				img.setOnMouseClicked(e -> showProductDetails(mainStage, product));
+
+				ComboBox<String> sizeBox = new ComboBox<>();
+				sizeBox.setPromptText("Size");
+				if (!product.getCategory().getCatName().equalsIgnoreCase("shoes")) {
+					sizeBox.getItems().addAll("S", "M", "L", "XL");
+				} else {
+					sizeBox.getItems().addAll("34", "36", "38", "40");
+				}
+
+				ComboBox<String> colorBox = new ComboBox<>();
+				colorBox.setPromptText("Color");
+				colorBox.getItems().addAll("Black", "Red", "Blue", "Green");
+
+				Text FAIL = new Text("");
+				FAIL.setFill(Color.TRANSPARENT);
+				FAIL.setFont(Font.font("Book Antiqua", 10));
+
+				HBox cartStuff = new HBox();
+				cartStuff.setAlignment(Pos.CENTER);
+
+				TextField amount = new TextField("");
+				amount.setPrefWidth(40);
+				amount.setAlignment(Pos.CENTER);
+				amount.setPromptText("Qty");
+
+				Button cartBtn = new Button("Add to Cart");
+
+				VBox IncDecBtns = new VBox();
+				Button incBtn = new Button("+");
+				Button decBtn = new Button("-");
+				incBtn.setPrefSize(30, 20);
+				decBtn.setPrefSize(30, 20);
+
+				incBtn.setOnAction(e -> {
+					int num;
+					try {
+						num = amount.getText().isEmpty() ? 0 : Integer.parseInt(amount.getText());
+						amount.setText(Integer.toString(num + 1));
+					} catch (NumberFormatException ex) {
+						showError("Invalid input! Please enter numbers only.");
+					}
+				});
+
+				decBtn.setOnAction(e -> {
+					try {
+						int num = Integer.parseInt(amount.getText());
+						if (num > 1)
+							amount.setText(Integer.toString(num - 1));
+					} catch (NumberFormatException ex) {
+						showError("Invalid input! Please enter numbers only.");
+					}
+				});
+
+				IncDecBtns.getChildren().addAll(incBtn, decBtn);
+				cartStuff.getChildren().addAll(cartBtn, amount, IncDecBtns);
+
+				cartBtn.setOnAction(e -> {
+					int count = 1;
+					try {
+						if (!amount.getText().isEmpty()) {
+							count = Integer.parseInt(amount.getText());
+							if (count <= 0)
+								throw new NumberFormatException();
+						}
+					} catch (NumberFormatException ex) {
+						showError("Invalid quantity!");
+						return;
+					}
+					tryAddToCart(product, sizeBox.getValue(), colorBox.getValue(), count, FAIL);
+					amount.clear();
+				});
+
+				productCard.getChildren().addAll(img, prodName, sizeBox, colorBox, cartStuff, FAIL);
+				grid.getChildren().add(productCard);
+			}
+		}
+	}
+
+	private ArrayList<Product> getRandomProducts(int count) {
+		ArrayList<Product> copy = new ArrayList<>(prodList);
+		ArrayList<Product> selected = new ArrayList<>();
+
+		int actualCount = Math.min(count, copy.size());
+
+		while (selected.size() < actualCount) {
+			int randIndex = (int) (Math.random() * copy.size());
+			Product picked = copy.remove(randIndex);
+			selected.add(picked);
+		}
+
+		return selected;
+	}
+
+	private void showError(String msg) {
+		Alert alert = new Alert(Alert.AlertType.ERROR);
+		alert.setTitle("Input Error");
+		alert.setHeaderText(null);
+		alert.setContentText(msg);
+		alert.showAndWait();
+	}
+
+	private void openProfileScene(Stage stage) {
+		BorderPane profilePane = new BorderPane();
+		Label profileLabel = new Label("Profile Page");
+		profileLabel.setStyle("-fx-text-fill: white; -fx-font-size: 20px;");
+		profilePane.setCenter(profileLabel);
+		profilePane.setStyle("-fx-background-color: #222;");
+
+		Button backBtn = new Button("Back");
+		backBtn.setOnAction(e -> start(stage));
+		BorderPane.setAlignment(backBtn, Pos.TOP_LEFT);
+		profilePane.setTop(backBtn);
+
+		Scene profileScene = new Scene(profilePane, 1000, 600);
+		stage.setScene(profileScene);
 	}
 
 	private void productsList() { // A list of all products organised by category
@@ -179,6 +402,7 @@ public class Main extends Application {
 			e.printStackTrace();
 		}
 		Products = prodList; // add all the products from the read file into the Products ArrayList
+
 	}
 
 	private void ProfileCreation(Stage primaryStage) {
@@ -204,82 +428,62 @@ public class Main extends Application {
 		pane1.setVgap(5);
 		pane1.setPadding(new Insets(10, 10, 10, 10));
 		pane1.setAlignment(Pos.CENTER);
-		pane1.setStyle("-fx-background-color: linear-gradient(to bottom, #ffffff, #cceeff)");
-
-//		Image backgroundImage = new Image(getClass().getResource("/background_image.png").toExternalForm());
-//
-//		// إعداد خلفية الصورة
-//		BackgroundImage background = new BackgroundImage(
-//		    backgroundImage,
-//		    BackgroundRepeat.NO_REPEAT,   
-//		    BackgroundRepeat.NO_REPEAT,
-//		    BackgroundPosition.CENTER,     
-//		    BackgroundSize.DEFAULT         
-//		);
-//		pane1.setBackground(new Background(background));
-//		
+		pane1.setStyle("-fx-background-color: #e6e1db");	
+		
+		VBox loginCard = new VBox(10);
+		loginCard.setPrefHeight(800);
+		loginCard.setPrefWidth(500);
+		loginCard.setAlignment(Pos.TOP_CENTER);
+		loginCard.setStyle(
+				"-fx-border-color: #ccc; -fx-border-radius: 10; -fx-background-radius: 10; -fx-background-color: #ffffff;");
+		pane1.add(loginCard, 0, 0);
 
 		Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();
 		Scene scene = new Scene(pane1, screenBounds.getWidth(), screenBounds.getHeight());
+		
+		ImageView logoImg = new ImageView(IMG_PATH + "newLogo1noBG.png");
+		logoImg.setFitHeight(250);
+		logoImg.setFitWidth(250);
+		
 		// UserName Label
 		Label userName = new Label("Username");
 		userName.setAlignment(Pos.CENTER);
-		GridPane.setHalignment(userName, HPos.CENTER);
-		userName.setMinWidth(300);
-		userName.setMinHeight(50);
-		userName.styleProperty().bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
-				"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 20), 30), "px; "
+		userName.setFont(Font.font("Century", FontWeight.BOLD, FontPosture.ITALIC, 25));
 
-		));
 		// PassWord label
 		Label passWord = new Label("Password");
 		passWord.setAlignment(Pos.CENTER);
-		GridPane.setHalignment(passWord, HPos.CENTER);
-		passWord.setMinWidth(300);
-		passWord.setMinHeight(50);
-		passWord.styleProperty().bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
-				"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 20), 30), "px; "
-
-		));
+		passWord.setFont(Font.font("Century", FontWeight.BOLD, FontPosture.ITALIC, 25));
+		
 		// Register button
 		Button register = new Button("Don't have an account?\n\t   Register");
 		register.setAlignment(Pos.CENTER);
 		register.setBackground(Background.EMPTY);
-		GridPane.setHalignment(register, HPos.CENTER);
-		register.styleProperty()
-				.bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
-						"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 10), 30),
-						"px; ", "-fx-text-fill: blue;"));
+		register.setFont(Font.font("Century", FontWeight.BOLD, FontPosture.ITALIC, 15));
+		register.setTextFill(Color.BLUE);
 
 		// Log in button
 		Button login = new Button("Log in");
 		login.setAlignment(Pos.CENTER);
+		applyBtnStyle(login);
+		login.setDisable(true);
 		GridPane.setHalignment(login, HPos.CENTER);
-		login.styleProperty()
-				.bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
-						"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 10), 30),
-						"px; "));
+		
 
 		// UserName Text Field
 		TextField UNfield = new TextField();
-		UNfield.setPromptText("Enter your username");
+		UNfield.setPromptText("Username");
 		UNfield.setAlignment(Pos.CENTER);
-		GridPane.setHalignment(UNfield, HPos.CENTER);
-		UNfield.styleProperty()
-				.bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
-						"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 20), 30),
-						"px; "));
+		UNfield.setMaxSize(250, 60);
+		UNfield.setFont(Font.font("Century", FontWeight.BOLD, FontPosture.ITALIC, 25));
 
 		// PassWord Field
 		PasswordField PWfield = new PasswordField();
-		PWfield.setPromptText("Enter your password");
+		PWfield.setPromptText("Password");
 		PWfield.setAlignment(Pos.CENTER);
-		GridPane.setHalignment(PWfield, HPos.CENTER);
-		PWfield.styleProperty().bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
-				"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 20), 30), "px; "
-
-		));
-
+		PWfield.setMaxSize(250, 60);
+		PWfield.setFont(Font.font("Century", FontWeight.BOLD, FontPosture.ITALIC, 25));
+		
 		// Log in button action
 		login.setOnAction(e -> {
 			if (UNfield.getText().trim().isEmpty()) {
@@ -316,7 +520,7 @@ public class Main extends Application {
 					loginError.setContentText("Incorrect username or password.");
 					loginError.showAndWait();
 					return;
-				}else {
+				} else {
 					start(primaryStage);
 				}
 
@@ -329,13 +533,8 @@ public class Main extends Application {
 		 * Field PassWord Field
 		 */
 
-		pane1.add(userName, 1, 1);
-		pane1.add(UNfield, 2, 1);
-		pane1.add(passWord, 1, 3);
-		pane1.add(PWfield, 2, 3);
-		pane1.add(login, 2, 5);
-		pane1.add(register, 2, 6);
-
+		loginCard.getChildren().addAll(logoImg, userName, UNfield, passWord, PWfield, login, register);
+		
 		// Name label
 		Label Name = new Label("Username");
 		Name.setAlignment(Pos.BASELINE_RIGHT);
@@ -442,7 +641,7 @@ public class Main extends Application {
 		));
 
 		// Logo Image
-		ImageView logo = new ImageView(IMG_PATH + "Logo.png");
+		ImageView logo = new ImageView(IMG_PATH + "newLogo1.png");
 		logo.setPreserveRatio(false);
 		logo.setSmooth(true);
 		logo.setCache(true);
@@ -455,7 +654,7 @@ public class Main extends Application {
 		pane2.setVgap(10);
 		pane2.setPadding(new Insets(20, 20, 20, 20));
 		pane2.setAlignment(Pos.CENTER_LEFT);
-		pane2.setStyle("-fx-background-color:  #ddceb8");// #ddceb8
+		pane2.setStyle("-fx-background-color:  #e6e1db");// #ddceb8
 		pane2.add(Name, 3, 1);
 		pane2.add(Nfield, 4, 1);
 		pane2.add(PassWord, 3, 2);
@@ -580,6 +779,7 @@ public class Main extends Application {
 
 					e.printStackTrace();
 				}
+				start(primaryStage);
 			}
 
 		});
@@ -1370,6 +1570,7 @@ public class Main extends Application {
 
 			Scene paypalScene = new Scene(PayPalPane, 350, 300);
 			payPalStage.setScene(paypalScene);
+			payPalStage.initOwner(primaryStage);
 			payPalStage.setTitle("PayPal login");
 			payPalStage.show();
 		});
