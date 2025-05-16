@@ -4,8 +4,9 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
-import java.util.Iterator;
+import java.util.Optional;
 import java.util.Scanner;
+import java.util.Stack;
 import java.util.regex.Pattern;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
@@ -25,73 +26,78 @@ import javafx.application.Application;
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.geometry.Rectangle2D;
-import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 import javafx.scene.Cursor;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
-import javafx.scene.control.ScrollPane.ScrollBarPolicy;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.Background;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.GridPane;
-import javafx.beans.binding.Bindings;
-import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
+import javafx.beans.value.ChangeListener;
 import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
 
 public class Main extends Application {
 
 	ArrayList<Product> Products = new ArrayList<Product>();
-	ArrayList<Product> Cart = new ArrayList<Product>();
 	ArrayList<Category> catList = new ArrayList<Category>();
 	ArrayList<Product> prodList = new ArrayList<Product>();
+	ArrayList<Product> guestCart = new ArrayList<>(); // for users that AREN'T logged in yet, so it saves their cart for
+														// when they do log in
+	ArrayList<User> users = new ArrayList<User>();
 	int Total = 0;
+	boolean loggedIn = false;
 	private static final String IMG_PATH = "file:///C:/Users/moham/eclipse-workspace/onlineShop/src/application/Images/";
 
 	private Stage mainStage;
-
 	private FlowPane productGrid;
 	private VBox drawerMenu;
 	private boolean isDrawerOpen = false;
 	private Rectangle overlay;
+	private StackPane root;
+	private Scene scene;
+	private BorderPane mainPane;
+	private final Stack<Node> historyStack = new Stack<>();
 
 	@Override
 	public void start(Stage primaryStage) {
 		this.mainStage = primaryStage;
 		productsList();
 
-		BorderPane mainPane = new BorderPane();
+		mainPane = new BorderPane();
 		HBox topBar = createTopBar(primaryStage);
 		mainPane.setTop(topBar);
 
 		drawerMenu = createDrawerMenu(primaryStage);
-		drawerMenu.setTranslateX(-8000); // Start off-screen to the left
+		drawerMenu.setPrefWidth(300);
+		drawerMenu.setMinWidth(300);
+		drawerMenu.setMaxWidth(300);
+		drawerMenu.setTranslateX(-300); // off-screen
 
 		productGrid = createProductGrid(getRandomProducts(20));
 		ScrollPane scrollPane = new ScrollPane(productGrid);
 		scrollPane.setBackground(Background.EMPTY);
 		scrollPane.setFitToWidth(true);
-		scrollPane.setStyle("-fx-background: #e0e0e0; -fx-border-color: transparent;"
-				+ "-fx-effect: dropshadow(gaussian, #ffffff, 3, 0, -2, -2),"
-				+ "dropshadow(gaussian, #c0c0c0, 3, 0, 2, 2);");
 
 		VBox centerContent = new VBox(scrollPane);
 		centerContent.setAlignment(Pos.CENTER_RIGHT);
 		centerContent.setPadding(new Insets(20));
+		centerContent.setStyle("-fx-background-color: transparent;");
 		mainPane.setCenter(centerContent);
 		mainPane.setStyle("-fx-background-color: #e0e0e0;");
 
@@ -100,15 +106,14 @@ public class Main extends Application {
 		overlay.setVisible(false);
 		overlay.setOnMouseClicked(e -> toggleDrawer());
 
-		StackPane root = new StackPane(mainPane, overlay, drawerMenu);
-		Scene scene = new Scene(root, 1000, 600);
-		drawerMenu.prefWidthProperty().bind(scene.widthProperty().add(800));
-		drawerMenu.translateYProperty().bind(scene.heightProperty().multiply(0.05));
+		root = new StackPane(mainPane, overlay, drawerMenu);
+		StackPane.setAlignment(drawerMenu, Pos.CENTER_LEFT);
+		scene = new Scene(root, 800, 800);
 		overlay.widthProperty().bind(scene.widthProperty());
 		overlay.heightProperty().bind(scene.heightProperty());
 
 		primaryStage.setScene(scene);
-		primaryStage.setTitle("Jothoor Shopping App");
+		primaryStage.setTitle("Online Shop");
 		primaryStage.setFullScreenExitHint("");
 		primaryStage.setFullScreen(true);
 		primaryStage.show();
@@ -116,11 +121,12 @@ public class Main extends Application {
 
 	private HBox createTopBar(Stage stage) {
 		Button menuBtn = new Button("≡");
+		applyBtnStyle(menuBtn);
 		menuBtn.setOnAction(e -> toggleDrawer());
 
 		TextField searchField = new TextField();
-		searchField.setPromptText("Search for a product...");
-		searchField.setPrefWidth(300);
+		searchField.setPromptText("Search for a product...                 🔍");
+		searchField.setPrefWidth(200);
 		searchField.textProperty().addListener((obs, oldText, newText) -> {
 			ArrayList<Product> filtered = new ArrayList<>();
 			for (Product p : prodList) {
@@ -131,10 +137,14 @@ public class Main extends Application {
 			updateProductGrid(productGrid, filtered);
 		});
 
+		ImageView logoImg = new ImageView(IMG_PATH + "newLogo1noBG3.png");
+		logoImg.setFitHeight(75);
+		logoImg.setFitWidth(250);
+
 		Region spacer = new Region();
 		HBox.setHgrow(spacer, Priority.ALWAYS);
 
-		HBox topBar = new HBox(10, menuBtn, searchField, spacer);
+		HBox topBar = new HBox(10, menuBtn, searchField, spacer, logoImg);
 		topBar.setPadding(new Insets(10));
 		topBar.setAlignment(Pos.CENTER_LEFT);
 		topBar.setStyle("-fx-background-color: #e0e0e0; -fx-border-color: transparent;"
@@ -143,19 +153,45 @@ public class Main extends Application {
 		return topBar;
 	}
 
-	private VBox createDrawerMenu(Stage stage) {
+	private VBox createDrawerMenu(Stage primaryStage) {
 		VBox drawer = new VBox();
 		drawer.setSpacing(10);
 		drawer.setPadding(new Insets(20));
 		drawer.setMaxWidth(300);
-		drawer.setStyle("-fx-background-color: #f0f0f0; -fx-border-color: #ccc;");
+		drawer.setStyle("""
+				    -fx-background-color: linear-gradient(to bottom, #f9f9f9, #e6e6e6);
+				    -fx-border-color: transparent;
+				    -fx-background-radius: 0 15 15 0; /* top-left, top-right, bottom-right, bottom-left */
+				    -fx-padding: 20;
+				    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.1), 10, 0.2, 0, 2);
+				""");
+
+		Button closeBtn = new Button("✕");
+		closeBtn.setFont(Font.font("Arial", FontWeight.BOLD, 20));
+		closeBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: #333;");
+		closeBtn.setAlignment(Pos.TOP_RIGHT);
+		closeBtn.setCursor(Cursor.HAND);
+		closeBtn.setOnAction(e -> toggleDrawer());
+
+		// align it to the right using an HBox wrapper
+		HBox closeContainer = new HBox(closeBtn);
+		closeContainer.setAlignment(Pos.TOP_RIGHT);
+
+		drawer.getChildren().add(closeContainer);
 
 		Button profileBtn = new Button("Profile");
 		profileBtn.setShape(new Circle(30));
 		profileBtn.setMinSize(60, 60);
 		profileBtn.setMaxSize(60, 60);
 		profileBtn.setStyle("-fx-background-color: #66c2ff; -fx-text-fill: white;");
-		profileBtn.setOnAction(e -> ProfileCreation(mainStage));
+		profileBtn.setCursor(Cursor.HAND);
+		profileBtn.setOnAction(e -> {
+			if (!loggedIn) {
+				ProfileCreation(mainStage);
+			} else {
+				openProfileScene(mainStage);
+			}
+		});
 		drawer.getChildren().add(profileBtn);
 
 		Label title = new Label("CATEGORIES");
@@ -166,12 +202,46 @@ public class Main extends Application {
 		for (Category category : catList) {
 			Button btn = new Button(category.getCatName());
 			btn.setStyle("-fx-background-color: transparent; -fx-text-fill: #444; -fx-font-size: 14;");
+			btn.setCursor(Cursor.HAND);
 			btn.setOnAction(e -> {
 				showProducts(mainStage, category.getCatName());
-				toggleDrawer();
+				closeDrawer();
 			});
 			drawer.getChildren().add(btn);
 		}
+		Region spacer = new Region(); // to create a space between the category buttons, and put this button at the
+										// bottom
+		VBox.setVgrow(spacer, Priority.ALWAYS);
+
+		Button cartButton = new Button("Check your cart - 🛒");
+		applyBtnStyle(cartButton);
+		cartButton.setMaxWidth(Double.MAX_VALUE);
+		cartButton.setOnAction(e -> showCart(primaryStage));
+
+		Button logoutBtn = new Button("Log out");
+		applyBtnStyle(logoutBtn);
+		logoutBtn.setMaxWidth(Double.MAX_VALUE);
+		logoutBtn.setOnAction(e -> {
+			if (loggedIn) {
+				loggedIn = false;
+				Alert logoutAlert = new Alert(AlertType.INFORMATION);
+				logoutAlert.setTitle("Logged Out");
+				logoutAlert.setHeaderText(null);
+				logoutAlert.setContentText("You have been logged out successfully.");
+				logoutAlert.initOwner(primaryStage);
+				logoutAlert.showAndWait();
+				start(primaryStage);
+			} else {
+				Alert logoutAlert = new Alert(AlertType.ERROR);
+				logoutAlert.setTitle("Logged Out");
+				logoutAlert.setHeaderText(null);
+				logoutAlert.setContentText("You are already logged out");
+				logoutAlert.initOwner(primaryStage);
+				logoutAlert.showAndWait();
+			}
+		});
+
+		drawer.getChildren().addAll(spacer, cartButton, logoutBtn);
 
 		return drawer;
 	}
@@ -179,14 +249,24 @@ public class Main extends Application {
 	private void toggleDrawer() {
 		TranslateTransition transition = new TranslateTransition(Duration.millis(150), drawerMenu);
 		if (isDrawerOpen) {
-			transition.setToX(-1500);
+			transition.setToX(-drawerMenu.getWidth());
 			overlay.setVisible(false);
 		} else {
-			transition.setToX(-600);
+			transition.setToX(0);
 			overlay.setVisible(true);
 		}
 		isDrawerOpen = !isDrawerOpen;
 		transition.play();
+	}
+
+	private void closeDrawer() {
+		if (isDrawerOpen) {
+			TranslateTransition transition = new TranslateTransition(Duration.millis(150), drawerMenu);
+			transition.setToX(-drawerMenu.getWidth());
+			transition.setOnFinished(e -> overlay.setVisible(false));
+			transition.play();
+			isDrawerOpen = false;
+		}
 	}
 
 	private FlowPane createProductGrid(ArrayList<Product> items) {
@@ -200,6 +280,9 @@ public class Main extends Application {
 
 	private void updateProductGrid(FlowPane grid, ArrayList<Product> items) {
 		grid.getChildren().clear();
+		grid.setStyle("-fx-background-color: #e0e0e0;" + "-fx-border-color: transparent;"
+				+ "-fx-effect: dropshadow(gaussian, #ffffff, 3, 0, -2, -2),"
+				+ "            dropshadow(gaussian, #c0c0c0, 3, 0, 2, 2);");
 
 		ArrayList<Product> printItems = new ArrayList<Product>();
 
@@ -209,11 +292,12 @@ public class Main extends Application {
 				VBox productCard = new VBox(10);
 				productCard.setAlignment(Pos.CENTER);
 				productCard.setPadding(new Insets(10));
-				productCard.setStyle(
-						"-fx-border-color: #ccc; -fx-border-radius: 10; -fx-background-radius: 10; -fx-background-color: #f9f9f9;");
+				productCard.setStyle("-fx-background-color: #ffffff;" + "-fx-background-radius: 15;"
+						+ "-fx-border-radius: 15;" + "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 10, 0.2, 0, 4);"
+						+ "-fx-padding: 30 40 30 40;");
 				productCard.setPrefWidth(250);
 
-				Label prodName = new Label("Product Name: " + product.getName() + "\nPrice: $" + product.getPrice());
+				Label prodName = new Label("Name: " + product.getName() + "\nPrice: $" + product.getPrice());
 				prodName.setFont(Font.font("Century", FontWeight.BOLD, 15));
 				prodName.setTextFill(Color.BLACK);
 
@@ -253,6 +337,35 @@ public class Main extends Application {
 				amount.setPrefWidth(40);
 				amount.setAlignment(Pos.CENTER);
 				amount.setPromptText("Qty");
+
+				amount.setOnAction(e -> {
+					if (amount.getText().trim().isEmpty())
+						return;
+
+					try {
+						int count = Integer.parseInt(amount.getText());
+						if (count <= 0) {
+							Alert zeroInput = new Alert(Alert.AlertType.WARNING);
+							zeroInput.initOwner(mainStage);
+							zeroInput.setTitle("Invalid Quantity");
+							zeroInput.setHeaderText(null);
+							zeroInput.setContentText("Please enter a quantity greater than 0.");
+							zeroInput.showAndWait();
+							return;
+						}
+
+						tryAddToCart(product, sizeBox.getValue(), colorBox.getValue(), count, FAIL);
+					} catch (NumberFormatException ex) {
+						Alert wrongInput = new Alert(Alert.AlertType.ERROR);
+						wrongInput.initOwner(mainStage);
+						wrongInput.setTitle("Input Error");
+						wrongInput.setHeaderText(null);
+						wrongInput.setContentText("Invalid input! Please enter numbers only.");
+						wrongInput.showAndWait();
+					}
+
+					amount.clear();
+				});
 
 				Button cartBtn = new Button("Add to Cart");
 
@@ -324,26 +437,28 @@ public class Main extends Application {
 
 	private void showError(String msg) {
 		Alert alert = new Alert(Alert.AlertType.ERROR);
+		alert.initOwner(mainStage);
 		alert.setTitle("Input Error");
 		alert.setHeaderText(null);
 		alert.setContentText(msg);
 		alert.showAndWait();
 	}
 
-	private void openProfileScene(Stage stage) {
+	private void openProfileScene(Stage primaryStage) {
 		BorderPane profilePane = new BorderPane();
 		Label profileLabel = new Label("Profile Page");
 		profileLabel.setStyle("-fx-text-fill: white; -fx-font-size: 20px;");
 		profilePane.setCenter(profileLabel);
 		profilePane.setStyle("-fx-background-color: #222;");
 
-		Button backBtn = new Button("Back");
-		backBtn.setOnAction(e -> start(stage));
+		Button backBtn = new Button("<- Back");
+		applyBtnStyle(backBtn);
+		backBtn.setOnAction(e -> goBack());
 		BorderPane.setAlignment(backBtn, Pos.TOP_LEFT);
 		profilePane.setTop(backBtn);
 
-		Scene profileScene = new Scene(profilePane, 1000, 600);
-		stage.setScene(profileScene);
+		setMainContent(profilePane);
+		primaryStage.setFullScreen(true);
 	}
 
 	private void productsList() { // A list of all products organised by category
@@ -406,8 +521,6 @@ public class Main extends Application {
 	}
 
 	private void ProfileCreation(Stage primaryStage) {
-		ArrayList<User> users = new ArrayList<User>();
-
 		File file = new File("C:/Users/moham/eclipse-workspace/onlineShop/src/application/Prod_Info/USERS.txt");
 		try (Scanner sc = new Scanner(file)) {
 			while (sc.hasNextLine()) {
@@ -415,7 +528,9 @@ public class Main extends Application {
 				String[] array = line.split(" ");
 				String name = array[0];
 				String password = array[1];
-				User u = new User(name, password);
+				String email = array[2];
+				String phone = array[3];
+				User u = new User(name, password, email, phone);
 				users.add(u);
 
 			}
@@ -428,62 +543,115 @@ public class Main extends Application {
 		pane1.setVgap(5);
 		pane1.setPadding(new Insets(10, 10, 10, 10));
 		pane1.setAlignment(Pos.CENTER);
-		pane1.setStyle("-fx-background-color: #e6e1db");	
-		
-		VBox loginCard = new VBox(10);
+		pane1.setStyle("-fx-background-color: #e6e1db");
+
+		VBox loginCard = new VBox(30);
 		loginCard.setPrefHeight(800);
 		loginCard.setPrefWidth(500);
 		loginCard.setAlignment(Pos.TOP_CENTER);
-		loginCard.setStyle(
-				"-fx-border-color: #ccc; -fx-border-radius: 10; -fx-background-radius: 10; -fx-background-color: #ffffff;");
+		loginCard.setStyle("-fx-background-color: #ffffff;" + "-fx-background-radius: 15;" + "-fx-border-radius: 15;"
+				+ "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 10, 0.2, 0, 4);" + "-fx-padding: 30 40 30 40;");
 		pane1.add(loginCard, 0, 0);
 
-		Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();
-		Scene scene = new Scene(pane1, screenBounds.getWidth(), screenBounds.getHeight());
-		
-		ImageView logoImg = new ImageView(IMG_PATH + "newLogo1noBG.png");
-		logoImg.setFitHeight(250);
-		logoImg.setFitWidth(250);
-		
-		// UserName Label
-		Label userName = new Label("Username");
-		userName.setAlignment(Pos.CENTER);
-		userName.setFont(Font.font("Century", FontWeight.BOLD, FontPosture.ITALIC, 25));
+		setMainContent(pane1);
+		primaryStage.setFullScreen(true);
 
-		// PassWord label
-		Label passWord = new Label("Password");
-		passWord.setAlignment(Pos.CENTER);
-		passWord.setFont(Font.font("Century", FontWeight.BOLD, FontPosture.ITALIC, 25));
-		
+		ImageView logoImg = new ImageView(IMG_PATH + "newLogo1noBG.png");
+		logoImg.setPreserveRatio(true);
+		logoImg.setFitHeight(250);
+
 		// Register button
-		Button register = new Button("Don't have an account?\n\t   Register");
+		Button register = new Button("\nDon't have an account?\n\t   Register");
 		register.setAlignment(Pos.CENTER);
 		register.setBackground(Background.EMPTY);
 		register.setFont(Font.font("Century", FontWeight.BOLD, FontPosture.ITALIC, 15));
 		register.setTextFill(Color.BLUE);
+		register.setCursor(Cursor.HAND);
 
 		// Log in button
 		Button login = new Button("Log in");
 		login.setAlignment(Pos.CENTER);
-		applyBtnStyle(login);
 		login.setDisable(true);
 		GridPane.setHalignment(login, HPos.CENTER);
-		
+
+		login.setStyle("-fx-background-color: #000000;" + "-fx-text-fill: white;" + "-fx-font-size: 16px;"
+				+ "-fx-background-radius: 10;" + "-fx-padding: 10 20;" + "-fx-cursor: hand;"
+				+ "-fx-effect: dropshadow(gaussian, #888888, 6, 0.3, 0, 1);");
+
+		login.setOnMouseEntered(e -> login.setStyle("-fx-background-color: #222;" + "-fx-text-fill: white;"
+				+ "-fx-font-size: 16px;" + "-fx-background-radius: 10;" + "-fx-padding: 10 20;" + "-fx-cursor: hand;"
+				+ "-fx-effect: dropshadow(gaussian, #666666, 8, 0.4, 0, 2);"));
+		login.setOnMouseExited(e -> login.setStyle("-fx-background-color: #000;" + "-fx-text-fill: white;"
+				+ "-fx-font-size: 16px;" + "-fx-background-radius: 10;" + "-fx-padding: 10 20;" + "-fx-cursor: hand;"
+				+ "-fx-effect: dropshadow(gaussian, #888888, 6, 0.3, 0, 1);"));
 
 		// UserName Text Field
 		TextField UNfield = new TextField();
-		UNfield.setPromptText("Username");
+		UNfield.setPromptText("👤  Username");
 		UNfield.setAlignment(Pos.CENTER);
 		UNfield.setMaxSize(250, 60);
-		UNfield.setFont(Font.font("Century", FontWeight.BOLD, FontPosture.ITALIC, 25));
 
 		// PassWord Field
 		PasswordField PWfield = new PasswordField();
-		PWfield.setPromptText("Password");
+		PWfield.setPromptText("🔒  Password");
 		PWfield.setAlignment(Pos.CENTER);
 		PWfield.setMaxSize(250, 60);
-		PWfield.setFont(Font.font("Century", FontWeight.BOLD, FontPosture.ITALIC, 25));
-		
+
+		TextField visiblePWfield = new TextField();
+		visiblePWfield.setPromptText("🔒  Password");
+		visiblePWfield.setAlignment(Pos.CENTER);
+		visiblePWfield.setMaxSize(250, 60);
+
+		visiblePWfield.textProperty().bindBidirectional(PWfield.textProperty());
+
+		Button toggleBtn = new Button("\uD83D\uDC41");
+		toggleBtn.setStyle("-fx-background-color: transparent;" + "-fx-font-size: 18px;" + "-fx-text-fill: #666;"
+				+ "-fx-cursor: hand;");
+
+		toggleBtn
+				.setOnMouseEntered(e -> toggleBtn.setStyle("-fx-background-color: #ddd;" + "-fx-background-radius: 50%;"
+						+ "-fx-font-size: 18px;" + "-fx-text-fill: #333;" + "-fx-cursor: hand;"));
+
+		toggleBtn.setOnMouseExited(e -> toggleBtn.setStyle("-fx-background-color: transparent;" + "-fx-font-size: 18px;"
+				+ "-fx-text-fill: #666;" + "-fx-cursor: hand;"));
+
+		StackPane passwordFieldStack = new StackPane();
+		passwordFieldStack.getChildren().addAll(PWfield, visiblePWfield);
+		visiblePWfield.setVisible(false); // hide the visible one initially
+
+		toggleBtn.setOnMousePressed(e -> { // make it visible when mouse click and hold
+			visiblePWfield.setVisible(true);
+			PWfield.setVisible(false);
+		});
+		toggleBtn.setOnMouseReleased(e -> {// make it invisible again when mouse released
+			visiblePWfield.setVisible(false);
+			PWfield.setVisible(true);
+		});
+		HBox passwordRow = new HBox(10, passwordFieldStack, toggleBtn);
+		passwordRow.setAlignment(Pos.CENTER);
+
+		String inputStyle = """
+				    -fx-background-color: transparent;
+				    -fx-border-color: transparent transparent #aaa transparent;
+				    -fx-border-width: 0 0 2 0;
+				    -fx-font-size: 16px;
+				    -fx-text-fill: #333;
+				    -fx-padding: 8 0 5 0;
+				""";
+
+		UNfield.setStyle(inputStyle);
+		PWfield.setStyle(inputStyle);
+		visiblePWfield.setStyle(inputStyle);
+
+		// Enable login only when both fields are not empty
+		ChangeListener<String> loginFieldListener = (obs, oldVal, newVal) -> {
+			boolean enable = !UNfield.getText().trim().isEmpty() && !PWfield.getText().trim().isEmpty();
+			login.setDisable(!enable);
+		};
+
+		UNfield.textProperty().addListener(loginFieldListener);
+		PWfield.textProperty().addListener(loginFieldListener);
+
 		// Log in button action
 		login.setOnAction(e -> {
 			if (UNfield.getText().trim().isEmpty()) {
@@ -509,6 +677,11 @@ public class Main extends Application {
 				for (User user : users) {
 					if (user.getName().equals(UNfield.getText()) && user.getPassword().equals(PWfield.getText())) {
 						flage = true;
+						Session.currentUser = user; // assign the matched user first
+						if (!guestCart.isEmpty()) {
+							Session.currentUser.getCart().addAll(guestCart);
+							guestCart.clear();
+						}
 						break;
 					}
 				}
@@ -521,7 +694,8 @@ public class Main extends Application {
 					loginError.showAndWait();
 					return;
 				} else {
-					start(primaryStage);
+					loggedIn = true;
+					goBack();
 				}
 
 			}
@@ -533,145 +707,85 @@ public class Main extends Application {
 		 * Field PassWord Field
 		 */
 
-		loginCard.getChildren().addAll(logoImg, userName, UNfield, passWord, PWfield, login, register);
-		
-		// Name label
-		Label Name = new Label("Username");
-		Name.setAlignment(Pos.BASELINE_RIGHT);
-		GridPane.setHalignment(Name, HPos.CENTER);
-		Name.setMinWidth(300);
-		Name.setMinHeight(50);
-		Name.styleProperty().bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
-				"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 15), 20), "px; "
+		loginCard.getChildren().addAll(logoImg, UNfield, passwordRow, login, register);
 
-		));
+		VBox registerCard = new VBox(30);
+		registerCard.setAlignment(Pos.TOP_CENTER);
+		registerCard.setStyle("-fx-background-color: #ffffff;" + "-fx-background-radius: 15;" + "-fx-border-radius: 15;"
+				+ "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 10, 0.2, 0, 4);" + "-fx-padding: 30 40 30 40;");
+		registerCard.setPrefWidth(500);
+		registerCard.setPrefHeight(800);
 
-		// PassWord label
-		Label PassWord = new Label("Password");
-		PassWord.setAlignment(Pos.BASELINE_RIGHT);
-		GridPane.setHalignment(PassWord, HPos.CENTER);
-		PassWord.setMinWidth(300);
-		PassWord.setMinHeight(50);
-		PassWord.styleProperty().bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
-				"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 15), 20), "px; "
+		ImageView logo1 = new ImageView(IMG_PATH + "newLogo1noBG.png");
+		logo1.setPreserveRatio(true);
+		logo1.setFitHeight(250);
 
-		));
-
-		// Email label
-		Label email = new Label("Email");
-		email.setAlignment(Pos.BASELINE_RIGHT);
-		GridPane.setHalignment(email, HPos.CENTER);
-		email.setMinWidth(300);
-		email.setMinHeight(50);
-		email.styleProperty().bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
-				"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 15), 20), "px; "
-
-		));
-
-		// PhoneNumber label
-		Label phoneNumber = new Label("Phone Number");
-		phoneNumber.setAlignment(Pos.BASELINE_RIGHT);
-		GridPane.setHalignment(phoneNumber, HPos.CENTER);
-		phoneNumber.setMinWidth(300);
-		phoneNumber.setMinHeight(50);
-		phoneNumber.styleProperty()
-				.bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
-						"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 15), 20),
-						"px; "
-
-				));
-
-		// Name Text Field
 		TextField Nfield = new TextField();
-		Nfield.setPromptText("Enter your username");
-		Nfield.setAlignment(Pos.BASELINE_RIGHT);
-		GridPane.setHalignment(Nfield, HPos.CENTER);
-		Nfield.styleProperty().bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
-				"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 15), 20), "px; "
+		Nfield.setPromptText("👤  Username");
+		Nfield.setMaxSize(250, 60);
+		Nfield.setAlignment(Pos.CENTER);
+		Nfield.setStyle(inputStyle); // same as login
 
-		));
-
-		// PassWord Field
 		PasswordField pwField = new PasswordField();
-		pwField.setPromptText("Enter your password");
-		pwField.setAlignment(Pos.BASELINE_RIGHT);
-		GridPane.setHalignment(pwField, HPos.CENTER);
-		pwField.styleProperty().bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
-				"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 15), 20), "px; "
+		pwField.setPromptText("🔒  Password");
+		pwField.setMaxSize(250, 60);
+		pwField.setAlignment(Pos.CENTER);
+		pwField.setStyle(inputStyle);
 
-		));
-
-		// Password confirmation field
 		PasswordField pwCField = new PasswordField();
-		pwCField.setPromptText("Confirm your password");
-		pwCField.setAlignment(Pos.BASELINE_RIGHT);
-		GridPane.setHalignment(pwCField, HPos.CENTER);
-		pwCField.styleProperty().bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
-				"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 15), 20), "px; "
+		pwCField.setPromptText("🔁  Confirm Password");
+		pwCField.setMaxSize(250, 60);
+		pwCField.setAlignment(Pos.CENTER);
+		pwCField.setStyle(inputStyle);
 
-		));
+		TextField emailField = new TextField();
+		emailField.setPromptText("📧  Email");
+		emailField.setMaxSize(250, 60);
+		emailField.setAlignment(Pos.CENTER);
+		emailField.setStyle(inputStyle);
 
-		// Email Text Field
-		TextField Efield = new TextField();
-		Efield.setPromptText("Enter your email");
-		Efield.setAlignment(Pos.BASELINE_RIGHT);
-		GridPane.setHalignment(Efield, HPos.CENTER);
-		Efield.styleProperty().bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
-				"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 15), 20), "px; "
+		TextField phoneField = new TextField();
+		phoneField.setPromptText("📞  Phone Number");
+		phoneField.setMaxSize(250, 60);
+		phoneField.setAlignment(Pos.CENTER);
+		phoneField.setStyle(inputStyle);
 
-		));
+		Button confirmBtn = new Button("Confirm");
+		confirmBtn.setAlignment(Pos.CENTER);
+		confirmBtn.setDisable(true);
 
-		// Phone Text Field
-		TextField PHfield = new TextField();
-		PHfield.setPromptText("Enter your phone number");
-		PHfield.setAlignment(Pos.BASELINE_RIGHT);
-		GridPane.setHalignment(PHfield, HPos.CENTER);
-		PHfield.styleProperty().bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
-				"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 15), 20), "px; "
+		confirmBtn.setStyle("-fx-background-color: #000000;" + "-fx-text-fill: white;" + "-fx-font-size: 16px;"
+				+ "-fx-background-radius: 10;" + "-fx-padding: 10 20;" + "-fx-cursor: hand;"
+				+ "-fx-effect: dropshadow(gaussian, #888888, 6, 0.3, 0, 1);");
 
-		));
+		confirmBtn.setOnMouseEntered(e -> login.setStyle("-fx-background-color: #222;" + "-fx-text-fill: white;"
+				+ "-fx-font-size: 16px;" + "-fx-background-radius: 10;" + "-fx-padding: 10 20;" + "-fx-cursor: hand;"
+				+ "-fx-effect: dropshadow(gaussian, #666666, 8, 0.4, 0, 2);"));
+		confirmBtn.setOnMouseExited(e -> login.setStyle("-fx-background-color: #000;" + "-fx-text-fill: white;"
+				+ "-fx-font-size: 16px;" + "-fx-background-radius: 10;" + "-fx-padding: 10 20;" + "-fx-cursor: hand;"
+				+ "-fx-effect: dropshadow(gaussian, #888888, 6, 0.3, 0, 1);"));
 
-		// Confirm button
-		Button confirm = new Button("Confirm");
-		confirm.setAlignment(Pos.BASELINE_RIGHT);
-		GridPane.setHalignment(confirm, HPos.CENTER);
-		confirm.styleProperty().bind(Bindings.concat("-fx-font-family: \"Book Antiqua\"; ", "-fx-font-style: italic; ",
-				"-fx-font-size: ", Bindings.min(Bindings.max(primaryStage.widthProperty().divide(40), 15), 20), "px; "
+		// Enable login only when both fields are not empty
+		ChangeListener<String> registerFieldListener = (obs, oldVal, newVal) -> {
+			boolean enable = !Nfield.getText().trim().isEmpty() && !pwField.getText().trim().isEmpty()
+					&& !pwCField.getText().trim().isEmpty() && !emailField.getText().trim().isEmpty()
+					&& !phoneField.getText().trim().isEmpty();
+			confirmBtn.setDisable(!enable);
+		};
 
-		));
+		Nfield.textProperty().addListener(registerFieldListener);
+		pwField.textProperty().addListener(registerFieldListener);
+		pwCField.textProperty().addListener(registerFieldListener);
+		emailField.textProperty().addListener(registerFieldListener);
+		phoneField.textProperty().addListener(registerFieldListener);
 
-		// Logo Image
-		ImageView logo = new ImageView(IMG_PATH + "newLogo1.png");
-		logo.setPreserveRatio(false);
-		logo.setSmooth(true);
-		logo.setCache(true);
+		registerCard.getChildren().addAll(logo1, Nfield, pwField, pwCField, emailField, phoneField, confirmBtn);
 
-		StackPane pane3 = new StackPane(logo);
-
-		// pane2
-		GridPane pane2 = new GridPane();
-		pane2.setHgap(10);
-		pane2.setVgap(10);
-		pane2.setPadding(new Insets(20, 20, 20, 20));
-		pane2.setAlignment(Pos.CENTER_LEFT);
-		pane2.setStyle("-fx-background-color:  #e6e1db");// #ddceb8
-		pane2.add(Name, 3, 1);
-		pane2.add(Nfield, 4, 1);
-		pane2.add(PassWord, 3, 2);
-		pane2.add(pwField, 4, 2);
-		pane2.add(pwCField, 4, 3);
-		pane2.add(email, 3, 4);
-		pane2.add(Efield, 4, 4);
-		pane2.add(phoneNumber, 3, 5);
-		pane2.add(PHfield, 4, 5);
-		pane2.add(confirm, 4, 6);
-
-		HBox box1 = new HBox(pane3, pane2);
-		HBox.setHgrow(logo, Priority.ALWAYS);
-		HBox.setHgrow(pane2, Priority.ALWAYS);
-
-		logo.fitWidthProperty().bind(box1.widthProperty().divide(2));
-		logo.fitHeightProperty().bind(box1.heightProperty());
+		GridPane wrapper = new GridPane();
+		wrapper.setAlignment(Pos.CENTER);
+		wrapper.setStyle("-fx-background-color: #e6e1db;");
+		wrapper.setPadding(new Insets(20));
+		wrapper.add(registerCard, 0, 0);
 
 		// Register button action
 
@@ -679,63 +793,18 @@ public class Main extends Application {
 
 			@Override
 			public void handle(ActionEvent event) {
-				scene.setRoot(box1);
+				setMainContent(wrapper);
+				primaryStage.setFullScreen(true);
 
 			}
 
 		});
 
 		// Confirm button action
-		confirm.setOnAction(new EventHandler<ActionEvent>() {
+		confirmBtn.setOnAction(new EventHandler<ActionEvent>() {
 
 			@Override
 			public void handle(ActionEvent event) {
-				if (Nfield.getText().trim().isEmpty()) {
-					Alert UNnull = new Alert(AlertType.WARNING);
-					UNnull.initOwner(primaryStage);
-					UNnull.setTitle("Username empty");
-					UNnull.setHeaderText(null);
-					UNnull.setContentText("Username cannot be empty.");
-					UNnull.showAndWait();
-					return;
-				}
-
-				if (pwField.getText().trim().isEmpty()) {
-					Alert PWnull = new Alert(AlertType.WARNING);
-					PWnull.initOwner(primaryStage);
-					PWnull.setTitle("Password empty");
-					PWnull.setHeaderText(null);
-					PWnull.setContentText("Password cannot be empty.");
-					PWnull.showAndWait();
-					return;
-				}
-				if (pwCField.getText().trim().isEmpty()) {
-					Alert PWnull = new Alert(AlertType.WARNING);
-					PWnull.initOwner(primaryStage);
-					PWnull.setTitle("Confirm Password empty");
-					PWnull.setHeaderText(null);
-					PWnull.setContentText("Please confirm your password");
-					PWnull.showAndWait();
-					return;
-				}
-				if (Efield.getText().trim().isEmpty()) {
-					Alert emailNull = new Alert(AlertType.WARNING);
-					emailNull.initOwner(primaryStage);
-					emailNull.setTitle("Email empty");
-					emailNull.setHeaderText(null);
-					emailNull.setContentText("Email cannot be empty.");
-					emailNull.showAndWait();
-					return;
-				}
-				if (PHfield.getText().trim().isEmpty()) {
-					Alert PHnull = new Alert(AlertType.WARNING);
-					PHnull.initOwner(primaryStage);
-					PHnull.setTitle("Phone Number empty");
-					PHnull.setHeaderText(null);
-					PHnull.setContentText("Phone Number cannot be empty.");
-					PHnull.showAndWait();
-					return;
-				}
 				if (!(pwField.getText().trim().equals(pwCField.getText().trim()))) {
 					Alert equalPassWord = new Alert(AlertType.WARNING);
 					equalPassWord.initOwner(primaryStage);
@@ -747,7 +816,7 @@ public class Main extends Application {
 				}
 
 				for (User user : users) {
-					if (user.getName().equals(Nfield.getText()) && user.getPassword().equals(pwField.getText())) {
+					if (user.getName().equals(Nfield.getText()) && user.getEmail().equals(emailField.getText())) {
 
 						Alert accountExist = new Alert(AlertType.WARNING);
 						accountExist.initOwner(primaryStage);
@@ -759,7 +828,8 @@ public class Main extends Application {
 					}
 				}
 
-				users.add(new User(Nfield.getText(), pwField.getText()));
+				users.add(new User(Nfield.getText(), pwField.getText(), emailField.getText(), phoneField.getText()));
+				Session.currentUser = users.get(users.size() - 1);
 				Alert accountCreated = new Alert(AlertType.INFORMATION);
 				accountCreated.initOwner(primaryStage);
 				accountCreated.setTitle("Account Created");
@@ -779,15 +849,12 @@ public class Main extends Application {
 
 					e.printStackTrace();
 				}
-				start(primaryStage);
+				loggedIn = true;
+				setMainContent(mainPane);
 			}
 
 		});
 
-		primaryStage.setScene(scene);
-		primaryStage.setFullScreenExitHint("");
-		primaryStage.setFullScreen(true);
-		primaryStage.show();
 	}
 
 	private void showProducts(Stage primaryStage, String category) {
@@ -799,9 +866,9 @@ public class Main extends Application {
 				+ "-fx-effect: dropshadow(gaussian, #ffffff, 3, 0, -2, -2),"
 				+ "            dropshadow(gaussian, #c0c0c0, 3, 0, 2, 2);");
 
-		Button returnButton = new Button("<- Back");
-		applyBtnStyle(returnButton);
-		returnButton.setOnAction(e -> start(primaryStage));
+		Button returnBtn = new Button("<- Back");
+		applyBtnStyle(returnBtn);
+		returnBtn.setOnAction(e -> goBack());
 
 		Button cartButton = new Button("Check your cart - 🛒");
 		applyBtnStyle(cartButton);
@@ -809,7 +876,7 @@ public class Main extends Application {
 
 		BorderPane topLayout = new BorderPane();
 		topLayout.setPadding(new Insets(10, 20, 10, 20));
-		topLayout.setLeft(returnButton);
+		topLayout.setLeft(returnBtn);
 		topLayout.setRight(cartButton);
 
 		Label catTitle = new Label(category);
@@ -846,11 +913,12 @@ public class Main extends Application {
 			VBox productCard = new VBox(10);
 			productCard.setAlignment(Pos.CENTER);
 			productCard.setPadding(new Insets(10));
-			productCard.setStyle(
-					"-fx-border-color: #ccc; -fx-border-radius: 10; -fx-background-radius: 10; -fx-background-color: #f9f9f9;");
+			productCard.setStyle("-fx-background-color: #ffffff;" + "-fx-background-radius: 15;"
+					+ "-fx-border-radius: 15;" + "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 10, 0.2, 0, 4);"
+					+ "-fx-padding: 30 40 30 40;");
 			productCard.setPrefWidth(250);
 
-			Label prodName = new Label("Product Name: " + product.getName() + "\nPrice: $" + product.getPrice());
+			Label prodName = new Label("Name: " + product.getName() + "\nPrice: $" + product.getPrice());
 			prodName.setFont(Font.font("Century", FontWeight.BOLD, 15));
 
 			ImageView img = new ImageView(IMG_PATH + product.getImgFileName());
@@ -907,6 +975,7 @@ public class Main extends Application {
 						amount.setText(Integer.toString(num));
 					} catch (NumberFormatException ex) {
 						Alert wrongInput = new Alert(Alert.AlertType.ERROR);
+						wrongInput.initOwner(primaryStage);
 						wrongInput.setTitle("Input Error");
 						wrongInput.setHeaderText(null);
 						wrongInput.setContentText("Invalid input! Please enter numbers only.");
@@ -919,6 +988,7 @@ public class Main extends Application {
 						amount.setText(Integer.toString(num));
 					} catch (NumberFormatException ex) {
 						Alert wrongInput = new Alert(Alert.AlertType.ERROR);
+						wrongInput.initOwner(primaryStage);
 						wrongInput.setTitle("Input Error");
 						wrongInput.setHeaderText(null);
 						wrongInput.setContentText("Invalid input! Please enter numbers only.");
@@ -941,6 +1011,7 @@ public class Main extends Application {
 						}
 					} catch (NumberFormatException ex) {
 						Alert wrongInput = new Alert(Alert.AlertType.ERROR);
+						wrongInput.initOwner(primaryStage);
 						wrongInput.setTitle("Input Error");
 						wrongInput.setHeaderText(null);
 						wrongInput.setContentText("Invalid input! Please enter numbers only.");
@@ -961,6 +1032,7 @@ public class Main extends Application {
 					int count = Integer.parseInt(amount.getText());
 					if (count <= 0) {
 						Alert zeroInput = new Alert(Alert.AlertType.WARNING);
+						zeroInput.initOwner(primaryStage);
 						zeroInput.setTitle("Invalid Quantity");
 						zeroInput.setHeaderText(null);
 						zeroInput.setContentText("Please enter a quantity greater than 0.");
@@ -971,6 +1043,7 @@ public class Main extends Application {
 					tryAddToCart(product, sizeBox.getValue(), colorBox.getValue(), count, FAIL);
 				} catch (NumberFormatException ex) {
 					Alert wrongInput = new Alert(Alert.AlertType.ERROR);
+					wrongInput.initOwner(primaryStage);
 					wrongInput.setTitle("Input Error");
 					wrongInput.setHeaderText(null);
 					wrongInput.setContentText("Invalid input! Please enter numbers only.");
@@ -996,6 +1069,7 @@ public class Main extends Application {
 						}
 					} catch (NumberFormatException ex) {
 						Alert wrongInput = new Alert(Alert.AlertType.ERROR);
+						wrongInput.initOwner(primaryStage);
 						wrongInput.setTitle("Input Error");
 						wrongInput.setHeaderText(null);
 						wrongInput.setContentText("Invalid input! Please enter numbers only.");
@@ -1013,10 +1087,7 @@ public class Main extends Application {
 
 		}
 
-		Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();
-		Scene productScene = new Scene(scrollPane, screenBounds.getWidth(), screenBounds.getHeight());
-		primaryStage.setScene(productScene);
-		primaryStage.setFullScreenExitHint("");
+		setMainContent(scrollPane);
 		primaryStage.setFullScreen(true);
 
 	}
@@ -1034,7 +1105,7 @@ public class Main extends Application {
 		topLayout.setPadding(new Insets(10, 20, 10, 20));
 
 		Button returnBtn = new Button("<- Back");
-		returnBtn.setOnAction(e -> showProducts(primaryStage, product.getCategory().getCatName()));
+		returnBtn.setOnAction(e -> goBack());
 		applyBtnStyle(returnBtn);
 
 		Label itemTitle = new Label(product.getName());
@@ -1117,7 +1188,7 @@ public class Main extends Application {
 				product.setSelectedColor(colorNames[finalI]);
 			});
 
-			// finally, add the colored circle button to the row
+			// add the colored circle button to the row
 			COLORS.getChildren().add(circlePane);
 		}
 
@@ -1255,21 +1326,53 @@ public class Main extends Application {
 
 		detailLayout.getChildren().addAll(topLayout, itemLayout, recommendedTab);
 
-		Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();
-		Scene detailScene = new Scene(detailLayout, screenBounds.getWidth(), screenBounds.getHeight());
-		primaryStage.setScene(detailScene);
+		setMainContent(detailLayout);
 		primaryStage.setFullScreen(true);
 	}
 
+	private void tryAddToCart(Product baseProduct, String size, String color, int count, Text failText) {
+		if (size == null || color == null) {
+			if (size == null && color == null) {
+				failText.setText("Please choose both a size and a color!");
+			} else if (size == null) {
+				failText.setText("Please choose a size!");
+			} else {
+				failText.setText("Please choose a color!");
+			}
+			failText.setFill(Color.RED);
+			return;
+		}
+
+		for (int i = 0; i < count; i++) {
+			Product item = new Product(baseProduct);
+			item.setSelectedSize(size);
+			item.setSelectedColor(color);
+			if (Session.currentUser != null) {
+				Session.currentUser.addtoCart(item);
+			} else {
+				guestCart.add(item);
+			}
+
+		}
+		failText.setFill(Color.TRANSPARENT);
+		System.out.println("Item(s) added successfully");
+	}
+
 	private void showCart(Stage primaryStage) {
-		if (Cart.isEmpty()) {
+		ArrayList<Product> cartToShow = (Session.currentUser == null) ? guestCart : Session.currentUser.getCart();
+		// this decides which cart to show, whether the guest's if not logged or the
+		// user's
+
+		if (cartToShow.isEmpty()) {
 			Alert emptyCart = new Alert(Alert.AlertType.ERROR);
+			emptyCart.initOwner(primaryStage);
 			emptyCart.setTitle("Cart's Empty");
 			emptyCart.setHeaderText(null);
 			emptyCart.setContentText("You haven't added anything to your cart yet!");
 			emptyCart.showAndWait();
 			return;
 		}
+
 		Total = 0;
 
 		FlowPane cartItemsFlow = new FlowPane();
@@ -1301,12 +1404,12 @@ public class Main extends Application {
 
 		ArrayList<Product> printedItems = new ArrayList<Product>();
 
-		for (Product product : Cart) {
+		for (Product product : cartToShow) {
 			if (printedItems.contains(product))
 				continue;
 
 			int count = 0;
-			for (Product dupe : Cart) {
+			for (Product dupe : cartToShow) {
 				if (product.equals(dupe)) {
 					count++;
 				}
@@ -1332,16 +1435,17 @@ public class Main extends Application {
 			VBox displayInfo = new VBox(10);
 
 			Button removeBtn = new Button("Remove Item - \uD83D\uDDD1");
-			if (Cart.size() > 1) {
+			if (cartToShow.size() > 1) {
 				removeBtn.setOnAction(e -> {
-					Cart.remove(product);
+					cartToShow.remove(product);
 					showCart(primaryStage);
 				});
 			} else {
 				removeBtn.setOnAction(e -> {
-					Cart.remove(product);
+					cartToShow.remove(product);
 					start(primaryStage);
 					Alert emptyCart2 = new Alert(Alert.AlertType.WARNING);
+					emptyCart2.initOwner(primaryStage);
 					emptyCart2.setTitle("Cart's Empty");
 					emptyCart2.setHeaderText(null);
 					emptyCart2.setContentText("You have completely emptied your cart!");
@@ -1362,19 +1466,18 @@ public class Main extends Application {
 
 		cartContainer.getChildren().add(cartTotal);
 
-		Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();
-		Scene itemScene = new Scene(scrollPane, screenBounds.getWidth(), screenBounds.getHeight());
-		primaryStage.setScene(itemScene);
+		setMainContent(scrollPane);
 		primaryStage.setFullScreen(true);
 
 		Button returnBtn = new Button("<- Back");
-		returnBtn.setOnAction(e -> showProducts(primaryStage, Cart.get(Cart.size() - 1).getCategory().getCatName()));
+		returnBtn.setOnAction(e -> goBack());
 
 		Button clearBtn = new Button("Clear your cart - \uD83D\uDDD1");
 		clearBtn.setOnAction(e -> {
-			Cart.clear();
+			cartToShow.clear();
 			start(primaryStage);
 			Alert emptyCart2 = new Alert(Alert.AlertType.WARNING);
+			emptyCart2.initOwner(primaryStage);
 			emptyCart2.setTitle("Cart's Empty");
 			emptyCart2.setHeaderText(null);
 			emptyCart2.setContentText("You have completely emptied your cart!");
@@ -1382,7 +1485,27 @@ public class Main extends Application {
 		});
 
 		Button checkoutBtn = new Button("Check out! - 🛒✅");
-		checkoutBtn.setOnAction(e -> checkOut(primaryStage));
+		checkoutBtn.setOnAction(e -> {
+			if (loggedIn) {
+				checkOut(primaryStage);
+			} else {
+				Alert loggedOut = new Alert(Alert.AlertType.WARNING);
+				loggedOut.initOwner(primaryStage);
+				loggedOut.setTitle("Logged Out!");
+				loggedOut.setHeaderText("You need to be logged in to continue");
+				loggedOut.setContentText("Would you like to log in now?");
+
+				ButtonType loginBtn = new ButtonType("Log in");
+				ButtonType cancelBtn = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+
+				loggedOut.getButtonTypes().setAll(loginBtn, cancelBtn);
+
+				Optional<ButtonType> result = loggedOut.showAndWait();
+				if (result.isPresent() && result.get() == loginBtn) {
+					ProfileCreation(mainStage);
+				}
+			}
+		});
 
 		BorderPane btnLayout = new BorderPane();
 		btnLayout.setPadding(new Insets(10, 20, 10, 20));
@@ -1409,7 +1532,7 @@ public class Main extends Application {
 		COLayoutTitle.setPadding(new Insets(10, 20, 10, 20));
 
 		Button returnBtn = new Button("<- Back");
-		returnBtn.setOnAction(e -> showCart(primaryStage));
+		returnBtn.setOnAction(e -> goBack());
 		applyBtnStyle(returnBtn);
 
 		Label COTitle = new Label("Check Out\n" + "Total: $" + Total + "                 ");
@@ -1440,12 +1563,12 @@ public class Main extends Application {
 
 		int orderNumber = (int) (Math.random() * 100000000);
 
-		for (Product product : Cart) {
+		for (Product product : Session.currentUser.getCart()) {
 			if (printedItems.contains(product))
 				continue;
 
 			int count = 0;
-			for (Product dupe : Cart) {
+			for (Product dupe : Session.currentUser.getCart()) {
 				if (product.equals(dupe)) {
 					count++;
 				}
@@ -1523,6 +1646,7 @@ public class Main extends Application {
 				}
 			} else {
 				Alert failAlert = new Alert(Alert.AlertType.ERROR);
+				failAlert.initOwner(primaryStage);
 				failAlert.setTitle("Error");
 				failAlert.setHeaderText(null);
 				failAlert.setContentText("There's an error in your information. Please try again.");
@@ -1581,34 +1705,9 @@ public class Main extends Application {
 
 		COLayoutFULL.getChildren().addAll(COLayoutTitle, COLayout);
 
-		Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();
-		Scene COscene = new Scene(COLayoutFULL, screenBounds.getWidth(), screenBounds.getHeight());
-		primaryStage.setScene(COscene);
+		setMainContent(COLayoutFULL);
 		primaryStage.setFullScreen(true);
 
-	}
-
-	private void tryAddToCart(Product baseProduct, String size, String color, int count, Text failText) {
-		if (size == null || color == null) {
-			if (size == null && color == null) {
-				failText.setText("Please choose both a size and a color!");
-			} else if (size == null) {
-				failText.setText("Please choose a size!");
-			} else {
-				failText.setText("Please choose a color!");
-			}
-			failText.setFill(Color.RED);
-			return;
-		}
-
-		for (int i = 0; i < count; i++) {
-			Product item = new Product(baseProduct);
-			item.setSelectedSize(size);
-			item.setSelectedColor(color);
-			Cart.add(item);
-		}
-		failText.setFill(Color.TRANSPARENT);
-		System.out.println("Item(s) added successfully");
 	}
 
 	private void payPalCheck(Stage payPalStage, TextField emailField, PasswordField passField) {
@@ -1645,6 +1744,7 @@ public class Main extends Application {
 		} else {
 			// Just show an alert, clear the fields, and let user retry
 			Alert failAlert = new Alert(Alert.AlertType.ERROR);
+			failAlert.initOwner(payPalStage);
 			failAlert.setTitle("Login Failed");
 			failAlert.setHeaderText(null);
 			failAlert.setContentText("Invalid email format. Please try again.");
@@ -1660,7 +1760,7 @@ public class Main extends Application {
 		VBox layout = new VBox(20);
 		layout.setAlignment(Pos.CENTER);
 		layout.setPadding(new Insets(30));
-		layout.setStyle("-fx-background-color: #e0f7fa;");
+		layout.setStyle("-fx-background-color: #e6e1db");
 
 		HBox itemsRecap = new HBox(15);
 		itemsRecap.setPadding(new Insets(10));
@@ -1669,9 +1769,9 @@ public class Main extends Application {
 
 		ScrollPane scrollPane = new ScrollPane();
 		scrollPane.setContent(itemsRecap);
-		scrollPane.setStyle(
-				"-fx-border-color: #ccc; -fx-border-radius: 10; -fx-background-radius: 10; -fx-background-color: #f9f9f9;");
-		scrollPane.setPrefHeight(220);
+		scrollPane.setStyle("-fx-background-color: #ffffff;" + "-fx-background-radius: 15;" + "-fx-border-radius: 15;"
+				+ "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 10, 0.2, 0, 4);" + "-fx-padding: 30 40 30 40;");
+		scrollPane.setPrefHeight(300);
 		scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
 		scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
 		scrollPane.setBackground(Background.EMPTY);
@@ -1686,12 +1786,12 @@ public class Main extends Application {
 
 		ArrayList<Product> printedItems = new ArrayList<Product>();
 
-		for (Product product : Cart) {
+		for (Product product : Session.currentUser.getCart()) {
 			if (printedItems.contains(product))
 				continue;
 
 			int count = 0;
-			for (Product dupe : Cart) {
+			for (Product dupe : Session.currentUser.getCart()) {
 				if (product.equals(dupe)) {
 					count++;
 				}
@@ -1727,15 +1827,13 @@ public class Main extends Application {
 		Button returnBtn = new Button("Return to Home");
 		applyBtnStyle(returnBtn);
 		returnBtn.setOnAction(e -> {
-			Cart.clear();
-			start(primaryStage);
+			Session.currentUser.getCart().clear();
+			goBack();
 		});
 
 		layout.getChildren().addAll(itemRecap, thankYou, details, returnBtn);
 
-		Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();
-		Scene confirmScene = new Scene(layout, screenBounds.getWidth(), screenBounds.getHeight());
-		primaryStage.setScene(confirmScene);
+		setMainContent(layout);
 		primaryStage.setFullScreen(true);
 	}
 
@@ -1772,6 +1870,23 @@ public class Main extends Application {
 			button.setScaleX(1.0);
 			button.setScaleY(1.0);
 		});
+	}
+
+	private void setMainContent(Node newContent) {
+		closeDrawer();
+		if (!root.getChildren().isEmpty()) {
+			Node current = root.getChildren().get(0);
+			historyStack.push(current); // store the current screen
+		}
+
+		root.getChildren().set(0, newContent);
+	}
+
+	private void goBack() {
+		if (!historyStack.isEmpty()) {
+			Node previous = historyStack.pop();
+			root.getChildren().set(0, previous);
+		}
 	}
 
 	public static void main(String[] args) {
