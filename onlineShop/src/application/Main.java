@@ -3,12 +3,17 @@ package application;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Scanner;
 import java.util.Stack;
 import java.util.regex.Pattern;
 import javafx.scene.layout.VBox;
+import javafx.scene.media.Media;
+import javafx.scene.media.MediaPlayer;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Rectangle;
@@ -40,8 +45,11 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.ProgressIndicator;
+import javafx.scene.control.RadioButton;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
+import javafx.scene.control.ToggleGroup;
+import javafx.scene.effect.BlendMode;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.Background;
@@ -49,6 +57,7 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.GridPane;
 import javafx.beans.value.ChangeListener;
+import javafx.collections.FXCollections;
 import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
 
@@ -58,8 +67,9 @@ public class Main extends Application {
 	ArrayList<Category> catList = new ArrayList<Category>();
 	ArrayList<Product> prodList = new ArrayList<Product>();
 	ArrayList<Product> guestCart = new ArrayList<>(); // for users that AREN'T logged in yet, so it saves their cart for
-														// when they do log in
+	ArrayList<Product> cartToShow = new ArrayList<>(); // when they do log in
 	ArrayList<User> users = new ArrayList<User>();
+
 	int Total = 0;
 	boolean loggedIn = false;
 	private static final String IMG_PATH = "file:///C:/Users/moham/eclipse-workspace/onlineShop/src/application/Images/";
@@ -73,23 +83,32 @@ public class Main extends Application {
 	private Scene scene;
 	private BorderPane mainPane;
 	private final Stack<Node> historyStack = new Stack<>();
+	private MediaPlayer mediaPlayer;
 
 	@Override
 	public void start(Stage primaryStage) {
 		this.mainStage = primaryStage;
-		productsList();
 
+		productsList();
+		Music();
+		setupMainLayout(primaryStage);
+		setupScene(primaryStage);
+
+		primaryStage.setTitle("Online Shop");
+		primaryStage.setFullScreenExitHint("");
+		primaryStage.setFullScreen(true);
+		primaryStage.show();
+	}
+
+	private void setupMainLayout(Stage primaryStage) {
 		mainPane = new BorderPane();
 		HBox topBar = createTopBar(primaryStage);
 		mainPane.setTop(topBar);
 
 		drawerMenu = createDrawerMenu(primaryStage);
-		drawerMenu.setPrefWidth(300);
-		drawerMenu.setMinWidth(300);
-		drawerMenu.setMaxWidth(300);
-		drawerMenu.setTranslateX(-300); // off-screen
 
 		productGrid = createProductGrid(getRandomProducts(20));
+		productGrid.setAlignment(Pos.CENTER);
 		ScrollPane scrollPane = new ScrollPane(productGrid);
 		scrollPane.setBackground(Background.EMPTY);
 		scrollPane.setFitToWidth(true);
@@ -99,8 +118,11 @@ public class Main extends Application {
 		centerContent.setPadding(new Insets(20));
 		centerContent.setStyle("-fx-background-color: transparent;");
 		mainPane.setCenter(centerContent);
-		mainPane.setStyle("-fx-background-color: #e0e0e0;");
 
+		mainPane.setStyle("-fx-background-color: #e6e1db;");
+	}
+
+	private void setupScene(Stage primaryStage) {
 		overlay = new Rectangle();
 		overlay.setFill(Color.rgb(0, 0, 0, 0.2));
 		overlay.setVisible(false);
@@ -108,21 +130,30 @@ public class Main extends Application {
 
 		root = new StackPane(mainPane, overlay, drawerMenu);
 		StackPane.setAlignment(drawerMenu, Pos.CENTER_LEFT);
+
 		scene = new Scene(root, 800, 800);
 		overlay.widthProperty().bind(scene.widthProperty());
 		overlay.heightProperty().bind(scene.heightProperty());
 
 		primaryStage.setScene(scene);
-		primaryStage.setTitle("Online Shop");
-		primaryStage.setFullScreenExitHint("");
-		primaryStage.setFullScreen(true);
-		primaryStage.show();
 	}
 
 	private HBox createTopBar(Stage stage) {
 		Button menuBtn = new Button("≡");
 		applyBtnStyle(menuBtn);
 		menuBtn.setOnAction(e -> toggleDrawer());
+
+		Button muteBtn = new Button("🔇");
+		applyBtnStyle(muteBtn);
+		muteBtn.setOnAction(e -> {
+			if (!mediaPlayer.isMute()) {
+				mediaPlayer.setMute(true);
+				muteBtn.setText("🔊");
+			} else {
+				mediaPlayer.setMute(false);
+				muteBtn.setText("🔇");
+			}
+		});
 
 		TextField searchField = new TextField();
 		searchField.setPromptText("Search for a product...                 🔍");
@@ -140,21 +171,34 @@ public class Main extends Application {
 		ImageView logoImg = new ImageView(IMG_PATH + "newLogo1noBG3.png");
 		logoImg.setFitHeight(75);
 		logoImg.setFitWidth(250);
+		logoImg.setCursor(Cursor.HAND);
+		logoImg.setOnMouseClicked(e -> showDevs(mainStage));
 
 		Region spacer = new Region();
 		HBox.setHgrow(spacer, Priority.ALWAYS);
 
-		HBox topBar = new HBox(10, menuBtn, searchField, spacer, logoImg);
+		HBox topBar = new HBox(10, menuBtn, muteBtn, searchField, spacer, logoImg);
 		topBar.setPadding(new Insets(10));
 		topBar.setAlignment(Pos.CENTER_LEFT);
-		topBar.setStyle("-fx-background-color: #e0e0e0; -fx-border-color: transparent;"
-				+ "-fx-effect: dropshadow(gaussian, #ffffff, 3, 0, -2, -2),"
-				+ "dropshadow(gaussian, #c0c0c0, 3, 0, 2, 2);");
+		topBar.setStyle("-fx-background-color: #e6e1db;");
 		return topBar;
+	}
+
+	private void Music() {
+		String musicFile = "src/application/shopMusic.mp3";
+		Media backgroundMusic = new Media(new File(musicFile).toURI().toString());
+		mediaPlayer = new MediaPlayer(backgroundMusic);
+		mediaPlayer.setCycleCount(MediaPlayer.INDEFINITE);
+		mediaPlayer.setVolume(0.2);
+		mediaPlayer.play();
 	}
 
 	private VBox createDrawerMenu(Stage primaryStage) {
 		VBox drawer = new VBox();
+		drawer.setPrefWidth(300);
+		drawer.setMinWidth(300);
+		drawer.setMaxWidth(300);
+		drawer.setTranslateX(-300); // off-screen
 		drawer.setSpacing(10);
 		drawer.setPadding(new Insets(20));
 		drawer.setMaxWidth(300);
@@ -180,11 +224,13 @@ public class Main extends Application {
 		drawer.getChildren().add(closeContainer);
 
 		Button profileBtn = new Button("Profile");
-		profileBtn.setShape(new Circle(30));
-		profileBtn.setMinSize(60, 60);
-		profileBtn.setMaxSize(60, 60);
-		profileBtn.setStyle("-fx-background-color: #66c2ff; -fx-text-fill: white;");
-		profileBtn.setCursor(Cursor.HAND);
+		if (!loggedIn) {
+			profileBtn.setShape(new Circle(30));
+			profileBtn.setMinSize(90, 90);
+			profileBtn.setMaxSize(90, 90);
+			applyBtnStyle(profileBtn);
+			profileBtn.setCursor(Cursor.HAND);
+		}
 		profileBtn.setOnAction(e -> {
 			if (!loggedIn) {
 				ProfileCreation(mainStage);
@@ -194,19 +240,65 @@ public class Main extends Application {
 		});
 		drawer.getChildren().add(profileBtn);
 
-		Label title = new Label("CATEGORIES");
-		title.setTextFill(Color.BLACK);
-		title.setFont(Font.font(16));
+		Label title = new Label("🛒 Shop by Category");
+		title.setAlignment(Pos.CENTER);
+		title.setMaxWidth(Double.MAX_VALUE);
+		title.setFont(Font.font("Segoe UI", FontWeight.EXTRA_BOLD, 18));
+		title.setTextFill(Color.web("#222"));
+		title.setStyle("""
+				    -fx-padding: 5 0 15 0;
+				    -fx-border-color: #ccc;
+				    -fx-border-width: 0 0 1 0;
+				    -fx-font-size: 16px;
+				""");
 		drawer.getChildren().add(title);
 
+		Region catSpacer = new Region();
+		catSpacer.setPrefHeight(10);
+		drawer.getChildren().add(catSpacer);
+
 		for (Category category : catList) {
-			Button btn = new Button(category.getCatName());
-			btn.setStyle("-fx-background-color: transparent; -fx-text-fill: #444; -fx-font-size: 14;");
+			Rectangle divider = new Rectangle(250, 1);
+			divider.setFill(Color.web("#cccccc"));
+			drawer.getChildren().add(divider);
+
+			Button btn = new Button("🛍 " + category.getCatName());
+			btn.setPrefWidth(Double.MAX_VALUE);
+			btn.setAlignment(Pos.CENTER_LEFT);
+			btn.setFont(Font.font("Segoe UI", FontWeight.BOLD, 14));
+			btn.setStyle("""
+					    -fx-background-color: #f0f0f0;
+					    -fx-text-fill: #333;
+					    -fx-background-radius: 10;
+					    -fx-border-color: #ccc;
+					    -fx-border-radius: 10;
+					    -fx-padding: 10 20;
+					""");
 			btn.setCursor(Cursor.HAND);
+
+			btn.setOnMouseEntered(ev -> btn.setStyle("""
+					    -fx-background-color: #dcdcdc;
+					    -fx-text-fill: #000;
+					    -fx-background-radius: 10;
+					    -fx-border-color: #bbb;
+					    -fx-border-radius: 10;
+					    -fx-padding: 10 20;
+					"""));
+
+			btn.setOnMouseExited(ev -> btn.setStyle("""
+					    -fx-background-color: #f0f0f0;
+					    -fx-text-fill: #333;
+					    -fx-background-radius: 10;
+					    -fx-border-color: #ccc;
+					    -fx-border-radius: 10;
+					    -fx-padding: 10 20;
+					"""));
+
 			btn.setOnAction(e -> {
 				showProducts(mainStage, category.getCatName());
 				closeDrawer();
 			});
+
 			drawer.getChildren().add(btn);
 		}
 		Region spacer = new Region(); // to create a space between the category buttons, and put this button at the
@@ -230,7 +322,6 @@ public class Main extends Application {
 				logoutAlert.setContentText("You have been logged out successfully.");
 				logoutAlert.initOwner(primaryStage);
 				logoutAlert.showAndWait();
-				start(primaryStage);
 			} else {
 				Alert logoutAlert = new Alert(AlertType.ERROR);
 				logoutAlert.setTitle("Logged Out");
@@ -280,9 +371,7 @@ public class Main extends Application {
 
 	private void updateProductGrid(FlowPane grid, ArrayList<Product> items) {
 		grid.getChildren().clear();
-		grid.setStyle("-fx-background-color: #e0e0e0;" + "-fx-border-color: transparent;"
-				+ "-fx-effect: dropshadow(gaussian, #ffffff, 3, 0, -2, -2),"
-				+ "            dropshadow(gaussian, #c0c0c0, 3, 0, 2, 2);");
+		grid.setStyle("-fx-background-color: #e6e1db;");
 
 		ArrayList<Product> printItems = new ArrayList<Product>();
 
@@ -316,15 +405,48 @@ public class Main extends Application {
 
 				ComboBox<String> sizeBox = new ComboBox<>();
 				sizeBox.setPromptText("Size");
-				if (!product.getCategory().getCatName().equalsIgnoreCase("shoes")) {
-					sizeBox.getItems().addAll("S", "M", "L", "XL");
+				sizeBox.setStyle("""
+						    -fx-background-color: white;
+						    -fx-border-color: #ccc;
+						    -fx-border-radius: 10;
+						    -fx-background-radius: 10;
+						    -fx-padding: 5 10 5 10;
+						    -fx-font-family: 'Segoe UI';
+						    -fx-font-size: 13;
+						    -fx-cursor: hand;
+						""");
+				if (!product.getCategory().getCatName().equalsIgnoreCase("ACCESSORIES")
+						&& !product.getCategory().getCatName().equalsIgnoreCase("MAKE UP")) {
+					if (!product.getCategory().getCatName().equalsIgnoreCase("shoes")) {
+						sizeBox.getItems().addAll("S", "M", "L", "XL");
+					} else {
+						sizeBox.getItems().addAll("34", "36", "38", "40");
+					}
 				} else {
-					sizeBox.getItems().addAll("34", "36", "38", "40");
+					sizeBox.setDisable(true);
+					sizeBox.setBlendMode(BlendMode.ADD);
 				}
 
-				ComboBox<String> colorBox = new ComboBox<>();
+				ComboBox<String> colorBox = new ComboBox<String>();
 				colorBox.setPromptText("Color");
-				colorBox.getItems().addAll("Black", "Red", "Blue", "Green");
+				colorBox.setStyle("""
+						    -fx-background-color: white;
+						    -fx-border-color: #ccc;
+						    -fx-border-radius: 10;
+						    -fx-background-radius: 10;
+						    -fx-padding: 5 10 5 10;
+						    -fx-font-family: 'Segoe UI';
+						    -fx-font-size: 13;
+						    -fx-cursor: hand;
+						""");
+
+				if (product.getCategory().getCatName().equalsIgnoreCase("ACCESSORIES")) {
+					colorBox.getItems().addAll("Gold", "Silver");
+				} else if (product.getCategory().getCatName().equalsIgnoreCase("MAKE UP")) {
+					colorBox.getItems().addAll("Pink", "Purple", "Red");
+				} else {
+					colorBox.getItems().addAll("Black", "Red", "Blue", "Green");
+				}
 
 				Text FAIL = new Text("");
 				FAIL.setFill(Color.TRANSPARENT);
@@ -354,7 +476,14 @@ public class Main extends Application {
 							return;
 						}
 
-						tryAddToCart(product, sizeBox.getValue(), colorBox.getValue(), count, FAIL);
+						if (!product.getCategory().getCatName().equalsIgnoreCase("ACCESSORIES")
+								&& !product.getCategory().getCatName().equalsIgnoreCase("MAKE UP")) {
+							tryAddToCart(product, sizeBox.getValue(), colorBox.getValue(), count, FAIL);
+						} else {
+							tryAddToCart(product, "-", colorBox.getValue(), count, FAIL);
+						}
+						amount.clear();
+
 					} catch (NumberFormatException ex) {
 						Alert wrongInput = new Alert(Alert.AlertType.ERROR);
 						wrongInput.initOwner(mainStage);
@@ -410,7 +539,12 @@ public class Main extends Application {
 						showError("Invalid quantity!");
 						return;
 					}
-					tryAddToCart(product, sizeBox.getValue(), colorBox.getValue(), count, FAIL);
+					if (!product.getCategory().getCatName().equalsIgnoreCase("ACCESSORIES")
+							&& !product.getCategory().getCatName().equalsIgnoreCase("MAKE UP")) {
+						tryAddToCart(product, sizeBox.getValue(), colorBox.getValue(), count, FAIL);
+					} else {
+						tryAddToCart(product, "-", colorBox.getValue(), count, FAIL);
+					}
 					amount.clear();
 				});
 
@@ -445,20 +579,215 @@ public class Main extends Application {
 	}
 
 	private void openProfileScene(Stage primaryStage) {
-		BorderPane profilePane = new BorderPane();
-		Label profileLabel = new Label("Profile Page");
-		profileLabel.setStyle("-fx-text-fill: white; -fx-font-size: 20px;");
-		profilePane.setCenter(profileLabel);
-		profilePane.setStyle("-fx-background-color: #222;");
+		GridPane profile = new GridPane();
+		profile.setStyle("-fx-background-color: #e6e1db;");
 
-		Button backBtn = new Button("<- Back");
+		Button backBtn = new Button("← Back");
 		applyBtnStyle(backBtn);
 		backBtn.setOnAction(e -> goBack());
-		BorderPane.setAlignment(backBtn, Pos.TOP_LEFT);
-		profilePane.setTop(backBtn);
 
-		setMainContent(profilePane);
-		primaryStage.setFullScreen(true);
+		profile.setPadding(new Insets(20));
+
+		profile.setAlignment(Pos.CENTER);
+
+		profile.setStyle("-fx-background-color: linear-gradient(to bottom, #eeeeee, #cccccc);");
+
+		VBox P = createVBox(15, 600, 400, Pos.TOP_CENTER);
+
+		HBox topBar = new HBox(backBtn);
+		topBar.setAlignment(Pos.TOP_LEFT);
+		topBar.setPadding(new Insets(10));
+
+		VBox fullLayout = new VBox(20, topBar, P);
+		fullLayout.setAlignment(Pos.TOP_CENTER);
+
+		P.setStyle("-fx-background-color: #ffffff; " + "-fx-background-radius: 12; "
+				+ "-fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 10, 0, 0, 4);");
+
+		P.setPadding(new Insets(20));
+
+		ImageView genderImg;
+
+		String gender = Session.currentUser.getGender();
+		if (gender != null)
+			gender = gender.trim();
+		if ("♂Male".equals(gender)) {
+			genderImg = new ImageView(IMG_PATH + "male.png");
+		} else if ("♀Female".equals(gender)) {
+			genderImg = new ImageView(IMG_PATH + "female.png");
+		} else {
+			genderImg = new ImageView(IMG_PATH + "user.png"); // proper fallback
+		}
+
+		genderImg.setFitWidth(100);
+		genderImg.setFitHeight(100);
+		genderImg.setPreserveRatio(true);
+		genderImg.setClip(new Circle(50, 50, 50)); // clip after it's definitely not null
+		P.getChildren().add(genderImg);
+
+		P.getChildren().addAll(createField("Username", Session.currentUser.getName()),
+				createField("Email", Session.currentUser.getEmail()),
+
+				createField("Phone", Session.currentUser.getPhone()),
+				createField("Gender", Session.currentUser.getGender()),
+				createField("Country", Session.currentUser.getCountry()));
+
+		profile.add(fullLayout, 0, 0);
+
+		setMainContent(profile);
+
+	}
+
+	private VBox createVBox(int spacing, double height, double width, Pos pos) {
+
+		VBox box = new VBox(spacing);
+
+		box.setPrefHeight(height);
+
+		box.setPrefWidth(width);
+
+		box.setAlignment(pos);
+
+		return box;
+
+	}
+
+	private Label createLabel(String text, boolean isTitle) {
+
+		Label label = new Label(text);
+
+		label.setAlignment(Pos.CENTER_LEFT);
+
+		if (isTitle) {
+			label.setFont(Font.font("Century", FontWeight.BOLD, FontPosture.REGULAR, 18));
+		} else {
+			label.setFont(Font.font("Century", FontWeight.NORMAL, 16));
+		}
+		return label;
+	}
+
+	private VBox createField(String title, String value) {
+
+		VBox field = new VBox(2);
+
+		field.setAlignment(Pos.CENTER_LEFT);
+
+		field.setPadding(new Insets(5));
+
+		field.getChildren().addAll(
+
+				createLabel(title, true),
+
+				createLabel(value, false)
+
+		);
+
+		field.setStyle("-fx-background-color: #f9f9f9; " + "-fx-background-radius: 8;");
+		return field;
+
+	}
+
+	private void showDevs(Stage primaryStage) {
+
+		VBox fullScene = new VBox(10);
+		fullScene.setStyle("-fx-background-color: linear-gradient(to bottom, #1e1e1e, #121212);" + "-fx-padding: 20;"
+				+ "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.4), 15, 0.2, 0, 4);");
+
+		String txtStyle = "-fx-font-family: 'Verdana';" + "-fx-font-size: 18px;" + "-fx-text-fill: white;"
+				+ "-fx-background-color: linear-gradient(to right, #4b6cb7, #182848);" + "-fx-padding: 10 20 10 20;"
+				+ "-fx-background-radius: 15;" + "-fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.3), 6, 0, 0, 2);";
+
+		BorderPane topLayout = new BorderPane();
+		topLayout.setPadding(new Insets(10, 20, 10, 20));
+
+		Label devsTitle = new Label("Developers");
+		devsTitle.setStyle("-fx-text-fill: #f5f5f5;" + "-fx-font-size: 26px;" + "-fx-font-weight: bold;"
+				+ "-fx-letter-spacing: 1px;");
+
+		devsTitle.setUnderline(true);
+		devsTitle.setAlignment(Pos.CENTER);
+		topLayout.setCenter(devsTitle);
+
+		Button returnBtn = new Button("← Back");
+		returnBtn.setStyle("-fx-background-color: linear-gradient(to right, #3a3a3a, #222);" + "-fx-text-fill: white;"
+				+ "-fx-background-radius: 10;" + "-fx-cursor: hand;" + "-fx-font-weight: bold;");
+		returnBtn.setOnAction(e -> goBack());
+		topLayout.setLeft(returnBtn);
+
+		FlowPane columns = new FlowPane();
+		columns.setHgap(30);
+		columns.setVgap(30);
+		columns.setPadding(new Insets(20));
+		columns.setAlignment(Pos.TOP_CENTER);
+
+		fullScene.getChildren().addAll(topLayout, columns);
+
+		VBox Yazan = new VBox(30);
+		Yazan.setStyle("-fx-background-color: #ffffff;" + "-fx-background-radius: 15;" + "-fx-border-radius: 15;"
+				+ "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 10, 0.2, 0, 4);" + "-fx-padding: 30 40 30 40;");
+		Yazan.setAlignment(Pos.CENTER);
+
+		ImageView yazanImg = new ImageView(IMG_PATH + "Yazan.jpg");
+		yazanImg.setFitWidth(100);
+		yazanImg.setFitHeight(100);
+		yazanImg.setPreserveRatio(true);
+		yazanImg.setClip(new Circle(50, 50, 50));
+		Label yazanName = new Label("Yazan Sabbah");
+		yazanName.setStyle(txtStyle);
+		Label yazanMajor = new Label("Software Engineer");
+		yazanMajor.setStyle(txtStyle);
+		Label yazanNum = new Label("4779");
+		yazanNum.setStyle(txtStyle);
+		Label yazanEmail = new Label("202404779@bethlehem.edu");
+		yazanEmail.setStyle(txtStyle);
+
+		Yazan.getChildren().addAll(yazanImg, yazanName, yazanMajor, yazanNum, yazanEmail);
+
+		VBox Athem = new VBox(30);
+		Athem.setStyle("-fx-background-color: #ffffff;" + "-fx-background-radius: 15;" + "-fx-border-radius: 15;"
+				+ "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 10, 0.2, 0, 4);" + "-fx-padding: 30 40 30 40;");
+		Athem.setAlignment(Pos.CENTER);
+
+		ImageView AthemImg = new ImageView(IMG_PATH + "Athem.jpg");
+		AthemImg.setFitWidth(100);
+		AthemImg.setFitHeight(100);
+		AthemImg.setPreserveRatio(true);
+		AthemImg.setClip(new Circle(50, 50, 50));
+		Label AthemName = new Label("Mohammad Athem");
+		AthemName.setStyle(txtStyle);
+		Label AthemMajor = new Label("Software Engineer");
+		AthemMajor.setStyle(txtStyle);
+		Label AthemNum = new Label("4340");
+		AthemNum.setStyle(txtStyle);
+		Label AthemEmail = new Label("202404340@bethlehem.edu");
+		AthemEmail.setStyle(txtStyle);
+
+		Athem.getChildren().addAll(AthemImg, AthemName, AthemMajor, AthemNum, AthemEmail);
+
+		VBox Reda = new VBox(30);
+		Reda.setStyle("-fx-background-color: #ffffff;" + "-fx-background-radius: 15;" + "-fx-border-radius: 15;"
+				+ "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 10, 0.2, 0, 4);" + "-fx-padding: 30 40 30 40;");
+		Reda.setAlignment(Pos.CENTER);
+
+		ImageView RedaImg = new ImageView(IMG_PATH + "Reda.jpg");
+		RedaImg.setFitWidth(100);
+		RedaImg.setFitHeight(100);
+		RedaImg.setPreserveRatio(true);
+		RedaImg.setClip(new Circle(50, 50, 50));
+		Label RedaName = new Label("Reda Abu Ayyash");
+		RedaName.setStyle(txtStyle);
+		Label RedaMajor = new Label("Software Engineer");
+		RedaMajor.setStyle(txtStyle);
+		Label RedaNum = new Label("4874");
+		RedaNum.setStyle(txtStyle);
+		Label RedaEmail = new Label("202404874@bethlehem.edu");
+		RedaEmail.setStyle(txtStyle);
+
+		Reda.getChildren().addAll(RedaImg, RedaName, RedaMajor, RedaNum, RedaEmail);
+
+		columns.getChildren().addAll(Yazan, Athem, Reda);
+
+		setMainContent(fullScene);
 	}
 
 	private void productsList() { // A list of all products organised by category
@@ -530,7 +859,9 @@ public class Main extends Application {
 				String password = array[1];
 				String email = array[2];
 				String phone = array[3];
-				User u = new User(name, password, email, phone);
+				String gender = array[4];
+				String country = array[5];
+				User u = new User(name, password, email, phone, gender, country);
 				users.add(u);
 
 			}
@@ -702,11 +1033,6 @@ public class Main extends Application {
 
 		});
 
-		/*
-		 * Add to pane1 UserName Label PassWord label Register button UserName Text
-		 * Field PassWord Field
-		 */
-
 		loginCard.getChildren().addAll(logoImg, UNfield, passwordRow, login, register);
 
 		VBox registerCard = new VBox(30);
@@ -716,9 +1042,9 @@ public class Main extends Application {
 		registerCard.setPrefWidth(500);
 		registerCard.setPrefHeight(800);
 
-		ImageView logo1 = new ImageView(IMG_PATH + "newLogo1noBG.png");
+		ImageView logo1 = new ImageView(IMG_PATH + "newLogo1noBG3.png");
 		logo1.setPreserveRatio(true);
-		logo1.setFitHeight(250);
+		logo1.setFitHeight(90);
 
 		TextField Nfield = new TextField();
 		Nfield.setPromptText("👤  Username");
@@ -750,18 +1076,71 @@ public class Main extends Application {
 		phoneField.setAlignment(Pos.CENTER);
 		phoneField.setStyle(inputStyle);
 
+		HBox genderRadio = new HBox(10);
+		genderRadio.setAlignment(Pos.CENTER);
+
+		ToggleGroup Gender = new ToggleGroup();
+		RadioButton Male = new RadioButton("♂Male");
+		RadioButton Female = new RadioButton("♀Female");
+		Male.setToggleGroup(Gender);
+		Female.setToggleGroup(Gender);
+
+		Male.setStyle("-fx-font-family: 'Segoe UI';" + "-fx-font-size: 14;" + "-fx-text-fill: #333;"
+				+ "-fx-background-color: #f2f2f2;" + "-fx-background-radius: 10;" + "-fx-border-color: #bbb;"
+				+ "-fx-border-radius: 10;" + "-fx-border-width: 1;" + "-fx-padding: 6 14;" + "-fx-cursor: hand;");
+
+		Female.setStyle("-fx-font-family: 'Segoe UI';" + "-fx-font-size: 14;" + "-fx-text-fill: #333;"
+				+ "-fx-background-color: #f2f2f2;" + "-fx-background-radius: 10;" + "-fx-border-color: #bbb;"
+				+ "-fx-border-radius: 10;" + "-fx-border-width: 1;" + "-fx-padding: 6 14;" + "-fx-cursor: hand;");
+
+		genderRadio.getChildren().addAll(Male, Female);
+
+		ComboBox<String> countryComboBox = new ComboBox<>();
+		countryComboBox.setStyle("-fx-background-color: white;" + "-fx-border-color: #ccc;" + "-fx-border-radius: 8;"
+				+ "-fx-background-radius: 8;" + "-fx-padding: 5 10 5 10;" + "-fx-font-family: 'Segoe UI';"
+				+ "-fx-font-size: 14;" + "-fx-cursor: hand;");
+
+		String[] countryCodes = Locale.getISOCountries();
+
+		for (String code : countryCodes) {
+			Locale locale = new Locale("", code);
+			String countryName = locale.getDisplayCountry();
+
+			if (countryName.equalsIgnoreCase("Israel"))
+				continue;
+
+			if (countryName.equalsIgnoreCase("Palestinian Territories")) {
+				if (!countryComboBox.getItems().contains("Palestine"))
+					countryComboBox.getItems().add("Palestine");
+			} else {
+				if (!countryComboBox.getItems().contains(countryName)) // to avoid duplication
+					countryComboBox.getItems().add(countryName);
+			}
+		}
+
+		FXCollections.sort(countryComboBox.getItems());
+		countryComboBox.setPromptText("Select your country");
+
 		Button confirmBtn = new Button("Confirm");
 		confirmBtn.setAlignment(Pos.CENTER);
 		confirmBtn.setDisable(true);
+
+		Button login1 = new Button("Login");
+		login1.setAlignment(Pos.CENTER);
+		login1.setBackground(Background.EMPTY);
+		login1.setFont(Font.font("Century", FontWeight.BOLD, FontPosture.ITALIC, 15));
+		login1.setTextFill(Color.BLUE);
+		login1.setCursor(Cursor.HAND);
+		login1.setOnAction(e -> setMainContent(pane1));
 
 		confirmBtn.setStyle("-fx-background-color: #000000;" + "-fx-text-fill: white;" + "-fx-font-size: 16px;"
 				+ "-fx-background-radius: 10;" + "-fx-padding: 10 20;" + "-fx-cursor: hand;"
 				+ "-fx-effect: dropshadow(gaussian, #888888, 6, 0.3, 0, 1);");
 
-		confirmBtn.setOnMouseEntered(e -> login.setStyle("-fx-background-color: #222;" + "-fx-text-fill: white;"
+		confirmBtn.setOnMouseEntered(e -> confirmBtn.setStyle("-fx-background-color: #222;" + "-fx-text-fill: white;"
 				+ "-fx-font-size: 16px;" + "-fx-background-radius: 10;" + "-fx-padding: 10 20;" + "-fx-cursor: hand;"
 				+ "-fx-effect: dropshadow(gaussian, #666666, 8, 0.4, 0, 2);"));
-		confirmBtn.setOnMouseExited(e -> login.setStyle("-fx-background-color: #000;" + "-fx-text-fill: white;"
+		confirmBtn.setOnMouseExited(e -> confirmBtn.setStyle("-fx-background-color: #000;" + "-fx-text-fill: white;"
 				+ "-fx-font-size: 16px;" + "-fx-background-radius: 10;" + "-fx-padding: 10 20;" + "-fx-cursor: hand;"
 				+ "-fx-effect: dropshadow(gaussian, #888888, 6, 0.3, 0, 1);"));
 
@@ -769,7 +1148,8 @@ public class Main extends Application {
 		ChangeListener<String> registerFieldListener = (obs, oldVal, newVal) -> {
 			boolean enable = !Nfield.getText().trim().isEmpty() && !pwField.getText().trim().isEmpty()
 					&& !pwCField.getText().trim().isEmpty() && !emailField.getText().trim().isEmpty()
-					&& !phoneField.getText().trim().isEmpty();
+					&& !phoneField.getText().trim().isEmpty() && Gender.getSelectedToggle() != null
+					&& countryComboBox.getValue() != null;
 			confirmBtn.setDisable(!enable);
 		};
 
@@ -778,8 +1158,18 @@ public class Main extends Application {
 		pwCField.textProperty().addListener(registerFieldListener);
 		emailField.textProperty().addListener(registerFieldListener);
 		phoneField.textProperty().addListener(registerFieldListener);
+		countryComboBox.valueProperty().addListener(registerFieldListener);
+		Gender.selectedToggleProperty().addListener((obs, oldToggle, newToggle) -> {
+			boolean enable = !Nfield.getText().trim().isEmpty() && !pwField.getText().trim().isEmpty()
+					&& !pwCField.getText().trim().isEmpty() && !emailField.getText().trim().isEmpty()
+					&& !phoneField.getText().trim().isEmpty() && Gender.getSelectedToggle() != null
+					&& countryComboBox.getValue() != null;
 
-		registerCard.getChildren().addAll(logo1, Nfield, pwField, pwCField, emailField, phoneField, confirmBtn);
+			confirmBtn.setDisable(!enable);
+		});
+
+		registerCard.getChildren().addAll(logo1, Nfield, pwField, pwCField, emailField, phoneField, genderRadio,
+				countryComboBox, confirmBtn, login1);
 
 		GridPane wrapper = new GridPane();
 		wrapper.setAlignment(Pos.CENTER);
@@ -789,22 +1179,15 @@ public class Main extends Application {
 
 		// Register button action
 
-		register.setOnAction(new EventHandler<ActionEvent>() {
-
-			@Override
-			public void handle(ActionEvent event) {
-				setMainContent(wrapper);
-				primaryStage.setFullScreen(true);
-
-			}
-
-		});
+		register.setOnAction(e -> setMainContent(wrapper));
 
 		// Confirm button action
 		confirmBtn.setOnAction(new EventHandler<ActionEvent>() {
 
 			@Override
 			public void handle(ActionEvent event) {
+				String emailRegex = "^[\\w.-]+@[\\w.-]+\\.[a-zA-Z]{2,6}$";
+
 				if (!(pwField.getText().trim().equals(pwCField.getText().trim()))) {
 					Alert equalPassWord = new Alert(AlertType.WARNING);
 					equalPassWord.initOwner(primaryStage);
@@ -812,6 +1195,16 @@ public class Main extends Application {
 					equalPassWord.setHeaderText(null);
 					equalPassWord.setContentText("Passwords do not match. Please try again.");
 					equalPassWord.showAndWait();
+					return;
+				}
+
+				if (!(Pattern.matches(emailRegex, emailField.getText()))) {
+					Alert failAlert = new Alert(Alert.AlertType.ERROR);
+					failAlert.initOwner(primaryStage);
+					failAlert.setTitle("Login Failed");
+					failAlert.setHeaderText(null);
+					failAlert.setContentText("Invalid email format. Please try again.");
+					failAlert.showAndWait();
 					return;
 				}
 
@@ -828,14 +1221,20 @@ public class Main extends Application {
 					}
 				}
 
-				users.add(new User(Nfield.getText(), pwField.getText(), emailField.getText(), phoneField.getText()));
-				Session.currentUser = users.get(users.size() - 1);
-				Alert accountCreated = new Alert(AlertType.INFORMATION);
-				accountCreated.initOwner(primaryStage);
-				accountCreated.setTitle("Account Created");
-				accountCreated.setHeaderText(null);
-				accountCreated.setContentText("Account created successfully!");
-				accountCreated.showAndWait();
+				if (Gender.getSelectedToggle() != null) {
+					RadioButton selectedRadio = (RadioButton) Gender.getSelectedToggle();
+					String genderText = selectedRadio.getText(); // "Male" or "Female"
+
+					users.add(new User(Nfield.getText(), pwField.getText(), emailField.getText(), phoneField.getText(),
+							genderText, countryComboBox.getValue()));
+					Session.currentUser = users.get(users.size() - 1);
+					Alert accountCreated = new Alert(AlertType.INFORMATION);
+					accountCreated.initOwner(primaryStage);
+					accountCreated.setTitle("Account Created");
+					accountCreated.setHeaderText(null);
+					accountCreated.setContentText("Account created successfully!");
+					accountCreated.showAndWait();
+				}
 
 				try {
 					PrintWriter writer = new PrintWriter(
@@ -850,7 +1249,10 @@ public class Main extends Application {
 					e.printStackTrace();
 				}
 				loggedIn = true;
-				setMainContent(mainPane);
+				Session.currentUser.setCart(guestCart);
+				goBack();
+				goBack();
+
 			}
 
 		});
@@ -862,11 +1264,9 @@ public class Main extends Application {
 		VBox productListContainer = new VBox(20);
 		productListContainer.setPadding(new Insets(20));
 		productListContainer.setAlignment(Pos.TOP_CENTER);
-		productListContainer.setStyle("-fx-background-color: #e0e0e0;" + "-fx-border-color: transparent;"
-				+ "-fx-effect: dropshadow(gaussian, #ffffff, 3, 0, -2, -2),"
-				+ "            dropshadow(gaussian, #c0c0c0, 3, 0, 2, 2);");
+		productListContainer.setStyle("-fx-background-color: #e6e1db;");
 
-		Button returnBtn = new Button("<- Back");
+		Button returnBtn = new Button("← Back");
 		applyBtnStyle(returnBtn);
 		returnBtn.setOnAction(e -> goBack());
 
@@ -936,15 +1336,47 @@ public class Main extends Application {
 
 			ComboBox<String> sizeBox = new ComboBox<String>();
 			sizeBox.setPromptText("Size");
-			if (!(category.equalsIgnoreCase("shoes"))) {
-				sizeBox.getItems().addAll("S", "M", "L", "XL");
+			sizeBox.setStyle("""
+					    -fx-background-color: white;
+					    -fx-border-color: #ccc;
+					    -fx-border-radius: 10;
+					    -fx-background-radius: 10;
+					    -fx-padding: 5 10 5 10;
+					    -fx-font-family: 'Segoe UI';
+					    -fx-font-size: 13;
+					    -fx-cursor: hand;
+					""");
+			if (!category.equalsIgnoreCase("Accessories") && !category.equalsIgnoreCase("MAKE UP")) {
+				if (!(category.equalsIgnoreCase("shoes"))) {
+					sizeBox.getItems().addAll("S", "M", "L", "XL");
+				} else {
+					sizeBox.getItems().addAll("34", "36", "38", "40");
+				}
 			} else {
-				sizeBox.getItems().addAll("34", "36", "38", "40");
+				sizeBox.setDisable(true);
+				sizeBox.setBlendMode(BlendMode.ADD);
 			}
 
 			ComboBox<String> colorBox = new ComboBox<String>();
 			colorBox.setPromptText("Color");
-			colorBox.getItems().addAll("Black", "Red", "Blue", "Green");
+			colorBox.setStyle("""
+					    -fx-background-color: white;
+					    -fx-border-color: #ccc;
+					    -fx-border-radius: 10;
+					    -fx-background-radius: 10;
+					    -fx-padding: 5 10 5 10;
+					    -fx-font-family: 'Segoe UI';
+					    -fx-font-size: 13;
+					    -fx-cursor: hand;
+					""");
+
+			if (category.equalsIgnoreCase("ACCESSORIES")) {
+				colorBox.getItems().addAll("Gold", "Silver");
+			} else if (category.equalsIgnoreCase("MAKE UP")) {
+				colorBox.getItems().addAll("Pink", "Purple", "Red");
+			} else {
+				colorBox.getItems().addAll("Black", "Red", "Blue", "Green");
+			}
 
 			Text FAIL = new Text("");
 			FAIL.setFill(Color.TRANSPARENT);
@@ -1040,7 +1472,14 @@ public class Main extends Application {
 						return;
 					}
 
-					tryAddToCart(product, sizeBox.getValue(), colorBox.getValue(), count, FAIL);
+					if (!product.getCategory().getCatName().equalsIgnoreCase("ACCESSORIES")
+							&& !product.getCategory().getCatName().equalsIgnoreCase("MAKE UP")) {
+						tryAddToCart(product, sizeBox.getValue(), colorBox.getValue(), count, FAIL);
+					} else {
+						tryAddToCart(product, "-", colorBox.getValue(), count, FAIL);
+					}
+					amount.clear();
+
 				} catch (NumberFormatException ex) {
 					Alert wrongInput = new Alert(Alert.AlertType.ERROR);
 					wrongInput.initOwner(primaryStage);
@@ -1078,8 +1517,12 @@ public class Main extends Application {
 					}
 				}
 
-				tryAddToCart(product, sizeBox.getValue(), colorBox.getValue(), count, FAIL);
-				amount.clear();
+				if (!product.getCategory().getCatName().equalsIgnoreCase("ACCESSORIES")
+						&& !product.getCategory().getCatName().equalsIgnoreCase("MAKE UP")) {
+					tryAddToCart(product, sizeBox.getValue(), colorBox.getValue(), count, FAIL);
+				} else {
+					tryAddToCart(product, "-", colorBox.getValue(), count, FAIL);
+				}
 			});
 
 			productCard.getChildren().addAll(img, prodName, sizeBox, colorBox, cartStuff, FAIL);
@@ -1097,14 +1540,12 @@ public class Main extends Application {
 		VBox detailLayout = new VBox(30);
 		detailLayout.setPadding(new Insets(20));
 		detailLayout.setAlignment(Pos.TOP_CENTER);
-		detailLayout.setStyle("-fx-background-color: #e0e0e0;" + "-fx-border-color: transparent;"
-				+ "-fx-effect: dropshadow(gaussian, #ffffff, 3, 0, -2, -2),"
-				+ "            dropshadow(gaussian, #c0c0c0, 3, 0, 2, 2);");
+		detailLayout.setStyle("-fx-background-color: #e6e1db;");
 
 		BorderPane topLayout = new BorderPane();
 		topLayout.setPadding(new Insets(10, 20, 10, 20));
 
-		Button returnBtn = new Button("<- Back");
+		Button returnBtn = new Button("← Back");
 		returnBtn.setOnAction(e -> goBack());
 		applyBtnStyle(returnBtn);
 
@@ -1124,7 +1565,7 @@ public class Main extends Application {
 
 		VBox DescRev = new VBox(20);
 
-		Text Description = new Text("Description:\n" + product.getDescription());
+		Text Description = new Text(product.getDescription() + "\n\nPrice: $" + product.getPrice() + "\n");
 		Description.setWrappingWidth(400);
 		Description.setFont(Font.font("Trebuchet MS", FontWeight.BOLD, 15));
 		Text Stars = new Text("\t ");
@@ -1142,15 +1583,25 @@ public class Main extends Application {
 		// this HBox will hold all the color options horizontally
 		HBox COLORS = new HBox(30); // spacing between each color circle is 30px
 
-		Label colorLabel = new Label("Colors:");
+		Label colorLabel = new Label("Color:");
 		colorLabel.setFont(Font.font("Trebuchet MS", FontWeight.BOLD, FontPosture.ITALIC, 15));
 
-		// these are the actual names we’ll use when assigning the selected color to the
-		// product
-		String[] colorNames = { "Black", "Red", "Blue", "Green" };
+		String[] colorNames;
+		Color[] Colors;
 
-		// these are the real JavaFX color values that match the above names
-		Color[] Colors = { Color.BLACK, Color.RED, Color.BLUE, Color.DARKOLIVEGREEN };
+		if (product.getCategory().getCatName().equalsIgnoreCase("ACCESSORIES")) {
+			// these are the actual names we’ll use when assigning the selected color to the
+			// product
+			colorNames = new String[] { "Gold", "Silver" };
+			// these are the color values that match the above names
+			Colors = new Color[] { Color.GOLDENROD, Color.GRAY };
+		} else if (product.getCategory().getCatName().equalsIgnoreCase("MAKE UP")) {
+			colorNames = new String[] { "Pink", "Purple", "Red" };
+			Colors = new Color[] { Color.PINK, Color.PURPLE, Color.RED };
+		} else {
+			colorNames = new String[] { "Black", "Red", "Blue", "Green" };
+			Colors = new Color[] { Color.BLACK, Color.RED, Color.BLUE, Color.DARKOLIVEGREEN };
+		}
 
 		VBox C = new VBox(10);
 		C.getChildren().addAll(colorLabel, COLORS);
@@ -1193,52 +1644,58 @@ public class Main extends Application {
 		}
 
 		// same idea now but for sizes
-		HBox SIZES = new HBox(30); // holds the size buttons with spacing
+		HBox SIZES = new HBox(30);
 		Label sizeLabel = new Label("Sizes:");
 		sizeLabel.setFont(Font.font("Trebuchet MS", FontWeight.BOLD, FontPosture.ITALIC, 15));
 
 		VBox SI = new VBox(10);
 		SI.getChildren().addAll(sizeLabel, SIZES);
 
-		// check if it's a shoe, if yes show numbers, if not show S, M, L, XL
-		String[] sizes;
-		if (!product.getCategory().getCatName().equalsIgnoreCase("shoes")) {
-			sizes = new String[] { "S", "M", "L", "XL" };
+		if (!product.getCategory().getCatName().equalsIgnoreCase("ACCESSORIES")
+				&& !product.getCategory().getCatName().equalsIgnoreCase("MAKE UP")) {
+			// check if it's a shoe, if yes show numbers, if not show S, M, L, XL
+			String[] sizes;
+			if (!product.getCategory().getCatName().equalsIgnoreCase("shoes")) {
+				sizes = new String[] { "S", "M", "L", "XL" };
+			} else {
+				sizes = new String[] { "34", "36", "38", "40" };
+			}
+
+			// use this to keep track of which size button is currently selected
+			Button[] sizeButtons = new Button[sizes.length];
+			final Button[] selectedSizeBtn = new Button[1];
+
+			// loop through the sizes and create a button for each one
+			for (int i = 0; i < sizes.length; i++) {
+				String size = sizes[i];
+				Button sizeBtn = new Button(size);
+				applyBtnStyle(sizeBtn);
+				sizeButtons[i] = sizeBtn;
+
+				// when user clicks on a size
+				sizeBtn.setOnAction(e -> {
+					// update the product’s selected size
+					product.setSelectedSize(size);
+
+					// remove the "selected" look from the previously selected button
+					if (selectedSizeBtn[0] != null) {
+						selectedSizeBtn[0].getStyleClass().remove("selected-btn");
+						applyBtnStyle(selectedSizeBtn[0]); // reset it to normal
+					}
+
+					// apply a special style to show this button is now selected
+					sizeBtn.getStyleClass().add("selected-btn");
+					sizeBtn.setStyle("-fx-background-color: #000000; -fx-text-fill: #ffffff; "
+							+ "-fx-background-radius: 12; -fx-border-radius: 12; -fx-padding: 10 20; -fx-cursor: hand;");
+					selectedSizeBtn[0] = sizeBtn;
+				});
+
+				// add this button to the size row
+				SIZES.getChildren().add(sizeBtn);
+			}
 		} else {
-			sizes = new String[] { "34", "36", "38", "40" };
-		}
-
-		// use this to keep track of which size button is currently selected
-		Button[] sizeButtons = new Button[sizes.length];
-		final Button[] selectedSizeBtn = new Button[1];
-
-		// loop through the sizes and create a button for each one
-		for (int i = 0; i < sizes.length; i++) {
-			String size = sizes[i];
-			Button sizeBtn = new Button(size);
-			applyBtnStyle(sizeBtn);
-			sizeButtons[i] = sizeBtn;
-
-			// when user clicks on a size
-			sizeBtn.setOnAction(e -> {
-				// update the product’s selected size
-				product.setSelectedSize(size);
-
-				// remove the "selected" look from the previously selected button
-				if (selectedSizeBtn[0] != null) {
-					selectedSizeBtn[0].getStyleClass().remove("selected-btn");
-					applyBtnStyle(selectedSizeBtn[0]); // reset it to normal
-				}
-
-				// apply a special style to show this button is now selected
-				sizeBtn.getStyleClass().add("selected-btn");
-				sizeBtn.setStyle("-fx-background-color: #000000; -fx-text-fill: #ffffff; "
-						+ "-fx-background-radius: 12; -fx-border-radius: 12; -fx-padding: 10 20; -fx-cursor: hand;");
-				selectedSizeBtn[0] = sizeBtn;
-			});
-
-			// add this button to the size row
-			SIZES.getChildren().add(sizeBtn);
+			sizeLabel.setText("");
+			product.setSelectedSize("-");
 		}
 
 		Button addtoCart = new Button("Add to cart - 🛒");
@@ -1267,41 +1724,24 @@ public class Main extends Application {
 		recomTitle.setFont(Font.font("Trebuchet MS", FontWeight.BOLD, 15));
 
 		HBox recomItems = new HBox(20);
-		ArrayList<Integer> usedItems = new ArrayList<>();
+		ArrayList<Product> randomRecoms = getRandomProducts(15);
 
-		int maxItems = Math.min(10, prodList.size());
-		while (usedItems.size() < maxItems) {
-			int rand = (int) (Math.random() * prodList.size());
-
-			boolean alreadyUsed = false;
-			for (int used : usedItems) {
-				if (used == rand) {
-					alreadyUsed = true;
-					break;
-				}
-			}
-
-			if (alreadyUsed)
-				continue;
-			usedItems.add(rand);
-
+		for (Product p : randomRecoms) {
 			VBox recomCard = new VBox();
 			recomCard.setAlignment(Pos.CENTER);
 
-			Label recomName = new Label(prodList.get(rand).getName());
+			Label recomName = new Label(p.getName());
 			recomName.setFont(Font.font("Trebuchet MS", FontWeight.BOLD, 10));
 
-			ImageView recomImg = new ImageView(IMG_PATH + prodList.get(rand).getImgFileName());
+			ImageView recomImg = new ImageView(IMG_PATH + p.getImgFileName());
 			recomImg.setFitHeight(150);
 			recomImg.setPreserveRatio(true);
 			recomImg.setOnMouseEntered(
 					e -> recomImg.setStyle("-fx-effect: dropshadow(gaussian, #888888, 10, 0.5, 0, 0);"));
 			recomImg.setOnMouseExited(e -> recomImg.setStyle(""));
 
-			recomCard.setOnMouseClicked(e -> showProductDetails(primaryStage, prodList.get(rand)));
-
+			recomCard.setOnMouseClicked(e -> showProductDetails(primaryStage, p));
 			recomCard.getChildren().addAll(recomImg, recomName);
-
 			recomItems.getChildren().add(recomCard);
 		}
 
@@ -1335,7 +1775,9 @@ public class Main extends Application {
 			if (size == null && color == null) {
 				failText.setText("Please choose both a size and a color!");
 			} else if (size == null) {
-				failText.setText("Please choose a size!");
+				if (!baseProduct.getCategory().getCatName().equalsIgnoreCase("ACCESSORIES")) {
+					failText.setText("Please choose a size!");
+				}
 			} else {
 				failText.setText("Please choose a color!");
 			}
@@ -1359,7 +1801,7 @@ public class Main extends Application {
 	}
 
 	private void showCart(Stage primaryStage) {
-		ArrayList<Product> cartToShow = (Session.currentUser == null) ? guestCart : Session.currentUser.getCart();
+		cartToShow = (Session.currentUser == null) ? guestCart : Session.currentUser.getCart();
 		// this decides which cart to show, whether the guest's if not logged or the
 		// user's
 
@@ -1375,32 +1817,30 @@ public class Main extends Application {
 
 		Total = 0;
 
+		VBox outerLayout = new VBox();
+		outerLayout.setStyle("-fx-background-color: #e6e1db;");
+		outerLayout.setAlignment(Pos.TOP_CENTER);
+		outerLayout.setPrefHeight(scene.getHeight()); // Ensure it fills screen height
+
 		FlowPane cartItemsFlow = new FlowPane();
 		cartItemsFlow.setHgap(30);
 		cartItemsFlow.setVgap(30);
 		cartItemsFlow.setPadding(new Insets(20));
 		cartItemsFlow.setAlignment(Pos.TOP_CENTER);
-		cartItemsFlow.setStyle("-fx-background-color: #e0e0e0;" + "-fx-border-color: transparent;"
-				+ "-fx-effect: dropshadow(gaussian, #ffffff, 3, 0, -2, -2),"
-				+ "            dropshadow(gaussian, #c0c0c0, 3, 0, 2, 2);");
+		cartItemsFlow.setStyle("-fx-background-color: #e6e1db;");
 
 		VBox cartContainer = new VBox(10);
-		cartContainer.setStyle("-fx-background-color: #e0e0e0;" + "-fx-border-color: transparent;"
-				+ "-fx-effect: dropshadow(gaussian, #ffffff, 3, 0, -2, -2),"
-				+ "            dropshadow(gaussian, #c0c0c0, 3, 0, 2, 2);");
+		cartContainer.setStyle("-fx-background-color: #e6e1db;");
 		cartContainer.getChildren().add(cartItemsFlow);
 		cartContainer.setPrefHeight(600);
 		cartContainer.setAlignment(Pos.TOP_CENTER);
 
 		ScrollPane scrollPane = new ScrollPane();
-		scrollPane.setContent(cartContainer);
-		scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-		scrollPane.setStyle("-fx-background: #e0e0e0; -fx-border-color: transparent;"
-				+ "-fx-effect: dropshadow(gaussian, #ffffff, 3, 0, -2, -2),"
-				+ "            dropshadow(gaussian, #c0c0c0, 3, 0, 2, 2);");
-
+		outerLayout.getChildren().addAll(cartContainer);
+		scrollPane.setContent(outerLayout);
+		scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+		scrollPane.setStyle("-fx-background-color: #e6e1db;");
 		scrollPane.setFitToWidth(true);
-		scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.ALWAYS);
 
 		ArrayList<Product> printedItems = new ArrayList<Product>();
 
@@ -1469,13 +1909,13 @@ public class Main extends Application {
 		setMainContent(scrollPane);
 		primaryStage.setFullScreen(true);
 
-		Button returnBtn = new Button("<- Back");
+		Button returnBtn = new Button("← Back");
 		returnBtn.setOnAction(e -> goBack());
 
 		Button clearBtn = new Button("Clear your cart - \uD83D\uDDD1");
 		clearBtn.setOnAction(e -> {
 			cartToShow.clear();
-			start(primaryStage);
+			goBack();
 			Alert emptyCart2 = new Alert(Alert.AlertType.WARNING);
 			emptyCart2.initOwner(primaryStage);
 			emptyCart2.setTitle("Cart's Empty");
@@ -1491,14 +1931,24 @@ public class Main extends Application {
 			} else {
 				Alert loggedOut = new Alert(Alert.AlertType.WARNING);
 				loggedOut.initOwner(primaryStage);
-				loggedOut.setTitle("Logged Out!");
-				loggedOut.setHeaderText("You need to be logged in to continue");
-				loggedOut.setContentText("Would you like to log in now?");
+				loggedOut.setTitle("Not Logged In");
+				loggedOut.setHeaderText("You need to be logged in to continue.");
+				loggedOut.setContentText("""
+						You're currently browsing as a guest. 🕵️‍♂️
 
-				ButtonType loginBtn = new ButtonType("Log in");
+						Would you like to log in now?
+						""");
+
+				ButtonType loginBtn = new ButtonType("Log In");
 				ButtonType cancelBtn = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
-
 				loggedOut.getButtonTypes().setAll(loginBtn, cancelBtn);
+
+				loggedOut.getDialogPane().setPrefSize(400, 200);
+
+				loggedOut.getDialogPane().setStyle("""
+						    -fx-font-family: 'Segoe UI';
+						    -fx-font-size: 13;
+						""");
 
 				Optional<ButtonType> result = loggedOut.showAndWait();
 				if (result.isPresent() && result.get() == loginBtn) {
@@ -1524,21 +1974,18 @@ public class Main extends Application {
 		VBox COLayoutFULL = new VBox(10);
 		COLayoutFULL.setPadding(new Insets(20));
 		COLayoutFULL.setAlignment(Pos.TOP_CENTER);
-		COLayoutFULL.setStyle("-fx-background-color: #e0e0e0;" + "-fx-border-color: transparent;"
-				+ "-fx-effect: dropshadow(gaussian, #ffffff, 3, 0, -2, -2),"
-				+ "            dropshadow(gaussian, #c0c0c0, 3, 0, 2, 2);");
+		COLayoutFULL.setStyle("-fx-background-color: #e6e1db;");
 
 		BorderPane COLayoutTitle = new BorderPane();
 		COLayoutTitle.setPadding(new Insets(10, 20, 10, 20));
 
-		Button returnBtn = new Button("<- Back");
+		Button returnBtn = new Button("← Back");
 		returnBtn.setOnAction(e -> goBack());
 		applyBtnStyle(returnBtn);
 
-		Label COTitle = new Label("Check Out\n" + "Total: $" + Total + "                 ");
+		Label COTitle = new Label("Check Out\n" + "Total: $" + Total);
 		COTitle.setFont(Font.font("", FontWeight.EXTRA_BOLD, 25));
 
-		COLayoutTitle.setRight(COTitle);
 		COLayoutTitle.setLeft(returnBtn);
 
 		HBox COLayout = new HBox(30);
@@ -1699,9 +2146,13 @@ public class Main extends Application {
 			payPalStage.show();
 		});
 
+		VBox Payment = new VBox(10);
+
 		paymentMethod.getChildren().addAll(creditCard, payPal);
 
-		COLayout.getChildren().addAll(scrollPane, payMethodInfo);
+		Payment.getChildren().addAll(COTitle, payMethodInfo);
+
+		COLayout.getChildren().addAll(scrollPane, Payment);
 
 		COLayoutFULL.getChildren().addAll(COLayoutTitle, COLayout);
 
@@ -1752,6 +2203,46 @@ public class Main extends Application {
 
 			emailField.clear();
 			passField.clear();
+		}
+	}
+
+	private void billPrinter() {
+		try {
+			PrintWriter writer = new PrintWriter(
+					"C:/Users/moham/eclipse-workspace/onlineShop/src/application/Prod_Info/Bill.txt");
+			writer.println(Session.currentUser.getName() + "'s Receipt      " + LocalDate.now());
+			writer.println("-----------------------------");
+
+			ArrayList<Product> printedItems = new ArrayList<>();
+
+			for (Product product : Session.currentUser.getCart()) {
+				if (printedItems.contains(product))
+					continue;
+
+				int count = 0;
+				for (Product dupe : Session.currentUser.getCart()) {
+					if (product.equals(dupe)) {
+						count++;
+					}
+				}
+
+				printedItems.add(product);
+
+				if (count > 1) {
+					writer.println(count + "x " + product.getName() + " - " + product.getSelectedSize() + " - "
+							+ product.getSelectedColor() + " - $" + product.getPrice() + " each");
+				} else {
+					writer.println(product.getName() + " - " + product.getSelectedSize() + " - "
+							+ product.getSelectedColor() + " - $" + product.getPrice());
+				}
+			}
+
+			writer.println("-----------------------------");
+			writer.println("Total: $" + Total);
+
+			writer.close();
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
 		}
 	}
 
@@ -1827,8 +2318,9 @@ public class Main extends Application {
 		Button returnBtn = new Button("Return to Home");
 		applyBtnStyle(returnBtn);
 		returnBtn.setOnAction(e -> {
+			billPrinter();
 			Session.currentUser.getCart().clear();
-			goBack();
+			setMainContent(mainPane);
 		});
 
 		layout.getChildren().addAll(itemRecap, thankYou, details, returnBtn);
